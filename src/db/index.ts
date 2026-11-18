@@ -3,9 +3,15 @@ import { Pool } from "pg";
 import * as schema from "./schema";
 
 const globalForDb = globalThis as unknown as { pool?: Pool };
-const pool =
-  globalForDb.pool ?? new Pool({ connectionString: process.env.DATABASE_URL, max: 10 });
-if (process.env.NODE_ENV !== "production") globalForDb.pool = pool;
+const url = process.env.DATABASE_URL ?? "";
+const local = /localhost|127\.0\.0\.1|host=\//.test(url);
+// Serverless-friendly: few connections, short idle time (Supabase closes idle ones), clear timeout instead of hanging.
+const pool = globalForDb.pool ?? new Pool({
+  connectionString: url, max: 3, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 8_000,
+  ssl: local ? undefined : { rejectUnauthorized: false },
+});
+pool.on("error", (e) => console.error("[db] idle client error:", e.message));
+globalForDb.pool = pool;
 
 export const db = drizzle(pool, { schema });
 export { schema };

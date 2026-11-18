@@ -111,7 +111,7 @@ export function RichEditor({ value, onChange, websiteId }: { value: string; onCh
       <Btn title="Redo (Ctrl+Y)" label="↷" disabled={!st.canRedo} run={() => c().redo().run()} />
     </div>
     {link !== null && <div className="tt-sub">
-      <input autoFocus placeholder="Paste or type the link address, e.g. https://…" value={link} onChange={(e) => setLink(e.target.value)}
+      <input type="text" autoFocus placeholder="Paste or type the link address, e.g. https://…" value={link} onChange={(e) => setLink(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const u = link.trim(); u ? c().extendMarkRange("link").setLink({ href: u }).run() : c().unsetLink().run(); setLink(null); } if (e.key === "Escape") setLink(null); }} />
       <button type="button" className="btn orange" onClick={() => { const u = (link || "").trim(); u ? c().extendMarkRange("link").setLink({ href: u }).run() : c().unsetLink().run(); setLink(null); }}>Apply</button>
       {st.link && <button type="button" className="btn" onClick={() => { c().extendMarkRange("link").unsetLink().run(); setLink(null); }}>Remove link</button>}
@@ -119,7 +119,7 @@ export function RichEditor({ value, onChange, websiteId }: { value: string; onCh
     </div>}
     {st.image && img && <div className="tt-sub">
       <b>Image</b>
-      <input style={{ flex: 1, minWidth: 180 }} placeholder="Describe the image (alt text: helps SEO and accessibility)" value={img.alt ?? ""} onChange={(e) => c().updateAttributes("image", { alt: e.target.value }).run()} />
+      <input type="text" style={{ flex: 1, minWidth: 180 }} placeholder="Describe the image (alt text: helps SEO and accessibility)" value={img.alt ?? ""} onChange={(e) => c().updateAttributes("image", { alt: e.target.value }).run()} />
       {[25, 50, 75, 100].map((w) => <button key={w} type="button" className={"btn" + (cur.width === w ? " on" : "")} onClick={() => setImg({ width: w })}>{w}%</button>)}
       {(["left", "center", "right"] as const).map((a) => <button key={a} type="button" className={"btn" + (cur.align === a ? " on" : "")} onClick={() => setImg({ align: a })}>{a[0].toUpperCase() + a.slice(1)}</button>)}
       <button type="button" className="btn" onClick={() => setPick(true)}>Replace</button>

@@ -30,7 +30,7 @@ export function MediaPicker({ websiteId, onPick, onClose }: { websiteId: string;
       <div><input ref={input} type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={(e) => { up(e.target.files?.[0]); e.target.value = ""; }} />
         <button className="btn orange" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Uploading…" : "Upload new"}</button>{" "}<button className="btn" onClick={onClose}>Close</button></div></div>
     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-      <input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") importLink(); }} placeholder="Or paste an image link (https://…) and press Import" style={{ flex: 1 }} />
+      <input type="text" value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") importLink(); }} placeholder="Or paste an image link (https://…) and press Import" style={{ flex: 1 }} />
       <button className="btn" disabled={busy || !link.trim()} onClick={importLink}>{busy ? "Importing…" : "Import"}</button>
     </div>
     {err && <p className="err-text">{err}</p>}
