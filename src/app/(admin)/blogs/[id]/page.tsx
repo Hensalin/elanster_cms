@@ -71,7 +71,7 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
   return (<>
     <div className="head"><div><h1>{isNew ? "New article" : "Edit article"}</h1>
       <p>{meta ? <><Status s={status} /> · Last updated {fmt(meta.updatedAt)}{meta.publishedAt ? ` · Published ${fmt(meta.publishedAt)}` : ""}</> : "Not saved yet"}</p></div>
-      <button className="btn" onClick={() => router.push("/blogs")}>← All articles</button></div>
+      <button className="btn backlink" onClick={() => router.push("/content")}>← All content</button></div>
     {locked && <p className="err-text">This article is live. Only a Website Admin can change it. You can duplicate it to make a new draft.</p>}
     <div className="editor-grid">
       <div className="card">
@@ -80,7 +80,7 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
         <div className="field"><label htmlFor="s">URL slug</label><input id="s" type="text" value={f.slug} disabled={locked}
           onChange={(e) => { setSlugEdited(true); set({ slug: slugify(e.target.value) }); }} /><small>The article address: /{f.slug || "your-article"}</small></div>
         <div className="field"><label htmlFor="x">Short description</label><textarea id="x" value={f.excerpt} disabled={locked} maxLength={500} onChange={(e) => set({ excerpt: e.target.value })} /><small>{f.excerpt.length}/500 · shown on blog cards</small></div>
-        <div className="field"><label>Content</label>{!locked ? <RichEditor value={f.content} onChange={(html) => set({ content: html })} /> : <div className="tt" dangerouslySetInnerHTML={{ __html: f.content }} />}</div>
+        <div className="field"><label>Content</label>{!locked ? <RichEditor value={f.content} websiteId={f.websiteId} onChange={(html) => set({ content: html })} /> : <div className="tt" dangerouslySetInnerHTML={{ __html: f.content }} />}</div>
         <h2 style={{ marginTop: 24 }}>SEO</h2>
         <div className="field"><label htmlFor="st">SEO title</label><input id="st" type="text" value={f.seoTitle} disabled={locked} onChange={(e) => set({ seoTitle: e.target.value })} /><small>{f.seoTitle.length}/60 recommended</small></div>
         <div className="field"><label htmlFor="md">Meta description</label><textarea id="md" value={f.metaDescription} disabled={locked} onChange={(e) => set({ metaDescription: e.target.value })} /><small>{f.metaDescription.length}/160 recommended</small></div>

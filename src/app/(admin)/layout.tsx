@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import { getUser } from "@/lib/auth";
-import { Nav } from "@/components/Nav";
+import { Chrome } from "@/components/Chrome";
 import { ToLogin } from "@/components/ToLogin";
 
 async function Shell({ children }: { children: React.ReactNode }) {
   const user = await getUser(); // reads the login cookie, so it must render at request time
   if (!user) return <ToLogin />;
-  return (<div className="shell"><div className="frame"><Nav user={user} /><main className="main">{children}</main></div></div>);
+  return <Chrome user={user}>{children}</Chrome>;
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

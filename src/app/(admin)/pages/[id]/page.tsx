@@ -86,7 +86,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
   const nEdited = Object.keys(changedMap()).length;
 
   return (<>
-    <div className="head"><div><Link href="/pages" style={{ fontSize: 13 }}>← All pages</Link><h1>{page.title} <Status s={page.status} /></h1>
+    <div className="head"><div><Link href="/content" className="backlink" style={{ fontSize: 13 }}>← All content</Link><h1>{page.title} <Status s={page.status} /></h1>
       <p>{page.website?.name} · {nEdited} edited text{nEdited === 1 ? "" : "s"}{page.unpublished && !dirty ? " · has unpublished changes" : ""}{dirty ? " · not saved yet" : ""}</p></div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="btn" disabled={!past.current.length} onClick={undo} title="Undo">↶ Undo</button>
