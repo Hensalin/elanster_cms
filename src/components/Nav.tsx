@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Check, FileText, Globe, Image as ImageIcon, LayoutDashboard, LogOut, Moon, Plus, Search, Sun } from "lucide-react";
+import { ChevronDown, Check, FileText, Globe, Image as ImageIcon, LayoutDashboard, LogOut, Moon, Plus, Search, Sun, Users } from "lucide-react";
 import { api } from "./ui";
 import { useSite } from "./site";
 import { CommandPalette } from "./CommandPalette";
@@ -33,7 +33,7 @@ export function Nav({ user }: { user: User }) {
     { href: "/", label: "Dashboard", icon: <LayoutDashboard size={16} />, key: "1" },
     { href: "/content", label: "Content", icon: <FileText size={16} />, key: "2" },
     { href: "/media", label: "Media", icon: <ImageIcon size={16} />, key: "3" },
-    ...(isSuper ? [{ href: "/websites", label: "Websites", icon: <Globe size={16} />, key: "4" }] : []),
+    ...(isSuper ? [{ href: "/websites", label: "Websites", icon: <Globe size={16} />, key: "4" }, { href: "/users", label: "Users", icon: <Users size={16} />, key: "5" }] : []),
   ];
   // Content also covers the older Pages / Blogs screens.
   const on = (h: string) => h === "/" ? path === "/" : h === "/content" ? ["/content", "/pages", "/blogs"].some((p) => path.startsWith(p)) : path.startsWith(h);

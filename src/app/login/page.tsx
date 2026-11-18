@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/components/ui";
 
@@ -22,6 +23,7 @@ export default function Login() {
         <div className="field"><label htmlFor="p">Password</label><input id="p" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
         {err && <p className="err-text" role="alert">{err}</p>}
         <button className="btn dark" style={{ width: "100%", justifyContent: "center" }} disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+        <p style={{ textAlign: "center", marginTop: 14 }}>New here? <Link href="/signup"><b>Create an account</b></Link></p>
       </form>
     </div>
   );
