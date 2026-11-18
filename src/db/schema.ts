@@ -3,7 +3,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   pgTable, pgEnum, text, boolean, integer, timestamp, jsonb, primaryKey,
-  uniqueIndex, index,
+  uniqueIndex, index, customType,
 } from "drizzle-orm/pg-core";
 import { createId } from "@/lib/id";
 
@@ -58,6 +58,8 @@ export const tags = pgTable("blog_tags", {
   slug: text("slug").notNull(),
 }, (t) => [uniqueIndex("tags_site_slug").on(t.websiteId, t.slug)]);
 
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
 export const media = pgTable("media", {
   id: id(),
   websiteId: text("website_id").notNull().references(() => websites.id, { onDelete: "cascade" }),
@@ -68,6 +70,7 @@ export const media = pgTable("media", {
   width: integer("width"), height: integer("height"),
   altText: text("alt_text").notNull().default(""),
   folder: text("folder").notNull().default(""),
+  data: bytea("data"),                         // the image itself (stored in the database so it works on Vercel)
   createdAt: createdAt(), deletedAt: deletedAt(),
 });
 
@@ -178,4 +181,8 @@ export const blogTagRelations = relations(blogTags, ({ one }) => ({
 export const activityRelations = relations(activityLogs, ({ one }) => ({
   user: one(users, { fields: [activityLogs.userId], references: [users.id] }),
   website: one(websites, { fields: [activityLogs.websiteId], references: [websites.id] }),
+}));
+
+export const pageRelations = relations(pages, ({ one }) => ({
+  website: one(websites, { fields: [pages.websiteId], references: [websites.id] }),
 }));

@@ -32,8 +32,8 @@ export async function authorize(req: Request, websiteParam: string) {
 
 type BlogFull = NonNullable<Awaited<ReturnType<typeof import("./blogs").blogWithRelations>>>;
 export function publicBlog(b: BlogFull, origin: string, withContent: boolean) {
-  const img = (m: { filename: string; altText: string } | null | undefined) =>
-    m ? { url: `${origin}/uploads/${m.filename}`, alt: m.altText } : null;
+  const img = (m: { id: string; altText: string } | null | undefined) =>
+    m ? { url: `${origin}/api/v1/media/${m.id}`, alt: m.altText } : null;
   return {
     id: b.id, title: b.title, slug: b.slug, excerpt: b.excerpt,
     ...(withContent ? { content: b.content } : {}),

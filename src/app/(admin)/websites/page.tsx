@@ -20,6 +20,7 @@ export default function Websites() {
           <td>{s.domain || "—"}</td><td>{s.published}</td><td>{s.drafts}</td>
           <td><span className={"badge " + (s.active ? "PUBLISHED" : "UNPUBLISHED")}>{s.active ? "Connected" : "Disabled"}</span></td>
           <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{isSuper && <>
+            <button className="btn sm" onClick={async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast("Address saved"); load(); } catch (e) { toast((e as Error).message, true); } }}>Address</button>{" "}
             <button className="btn sm" onClick={() => setKeysFor(s)}>API keys</button>{" "}
             <button className="btn sm" onClick={async () => { try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website disabled" : "Website enabled"); load(); } catch (e) { toast((e as Error).message, true); } }}>{s.active ? "Disable" : "Enable"}</button></>}</td>
         </tr>))}</tbody></table></div>}

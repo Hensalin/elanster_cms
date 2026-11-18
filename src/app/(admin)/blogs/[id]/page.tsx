@@ -3,10 +3,12 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, fmt, Status, useToast } from "@/components/ui";
 import { RichEditor } from "@/components/RichEditor";
+import { MediaPicker } from "@/components/MediaPicker";
 
 const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
 const empty = { websiteId: "", title: "", slug: "", excerpt: "", content: "", categoryId: "", tags: [] as string[],
-  seoTitle: "", metaDescription: "", canonicalUrl: "", robots: "index,follow", ogTitle: "", ogDescription: "" };
+  seoTitle: "", metaDescription: "", canonicalUrl: "", robots: "index,follow", ogTitle: "", ogDescription: "",
+  featuredImageId: "", ogImageId: "", authorId: "" };
 
 export default function Editor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params); const isNew = id === "new"; const router = useRouter();
@@ -15,20 +17,24 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
   const [tagText, setTagText] = useState(""); const [slugEdited, setSlugEdited] = useState(!isNew);
   const [sched, setSched] = useState(""); const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false);
   const { toast, el } = useToast(); const loaded = useRef(false);
+  const [authors, setAuthors] = useState<any[]>([]); const [pick, setPick] = useState<null | "featuredImageId" | "ogImageId">(null); const [showPv, setShowPv] = useState(false);
   const set = (p: Partial<typeof empty>) => { setF((x) => ({ ...x, ...p })); setDirty(true); };
 
   useEffect(() => { (async () => {
-    const [s, m] = await Promise.all([api("/api/v1/admin/websites"), api("/api/v1/auth/me")]); setSites(s); setMe(m);
+    const [s, m, u] = await Promise.all([api("/api/v1/admin/websites"), api("/api/v1/auth/me"), api("/api/v1/admin/users").catch(() => [])]); setSites(s); setMe(m); setAuthors(u);
     if (isNew) { setF((x) => ({ ...x, websiteId: s[0]?.id ?? "" })); loaded.current = true; return; }
     try { const b = await api(`/api/v1/admin/blogs/${id}`); setMeta(b);
       setF({ websiteId: b.websiteId, title: b.title, slug: b.slug, excerpt: b.excerpt, content: b.content, categoryId: b.categoryId ?? "",
         tags: b.tagLinks.map((l: any) => l.tag.name), seoTitle: b.seoTitle, metaDescription: b.metaDescription, canonicalUrl: b.canonicalUrl,
-        robots: b.robots, ogTitle: b.ogTitle, ogDescription: b.ogDescription }); loaded.current = true;
+        robots: b.robots, ogTitle: b.ogTitle, ogDescription: b.ogDescription,
+        featuredImageId: b.featuredImageId ?? "", ogImageId: b.ogImageId ?? "", authorId: b.authorId ?? "" }); loaded.current = true;
     } catch (e) { toast((e as Error).message, true); }
   })(); }, [id]); // eslint-disable-line
   useEffect(() => { if (f.websiteId) api(`/api/v1/admin/categories?website=${f.websiteId}`).then(setCats).catch(() => setCats([])); }, [f.websiteId]);
   useEffect(() => { const h = (e: BeforeUnloadEvent) => { if (dirty) e.preventDefault(); }; window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h); }, [dirty]);
 
+  const site = sites.find((x) => x.id === f.websiteId);
+  const imgUrl = (id: string) => (id ? `/api/v1/media/${id}` : "");
   const role = me ? (me.user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : me.websiteRoles[f.websiteId]) : null;
   const canPublish = role === "SUPER_ADMIN" || role === "WEBSITE_ADMIN";
   const status: string = meta?.status ?? "DRAFT";
@@ -38,7 +44,7 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
     if (!f.title.trim()) { toast("Add a title first", true); return null; }
     setBusy(true);
     try {
-      const body = { ...f, categoryId: f.categoryId || null };
+      const body = { ...f, categoryId: f.categoryId || null, featuredImageId: f.featuredImageId || null, ogImageId: f.ogImageId || null, authorId: f.authorId || null };
       const b = isNew ? await api("/api/v1/admin/blogs", { method: "POST", body }) : await api(`/api/v1/admin/blogs/${id}`, { method: "PUT", body });
       setMeta(b); setDirty(false); setF((x) => ({ ...x, slug: b.slug }));
       if (!quiet) toast(status === "PUBLISHED" ? "Published article updated" : "Draft saved");
@@ -88,7 +94,7 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
         <div className="card"><h2>Publish</h2>
           <div style={{ display: "grid", gap: 8 }}>
             {!locked && <button className="btn" disabled={busy} onClick={() => save()}>{status === "PUBLISHED" ? "Update published article" : "Save draft"}</button>}
-            <button className="btn" disabled={busy} onClick={preview}>Preview</button>
+            <button className="btn" onClick={() => (site?.domain ? setShowPv(true) : preview())}>Preview in site design</button>
             {canPublish ? <>
               {status !== "PUBLISHED" && <button className="btn dark" disabled={busy} onClick={() => act("publish", "Published. The website will show it shortly.")}>Publish now</button>}
               {status === "PUBLISHED" && <button className="btn danger" disabled={busy} onClick={() => confirm("Remove this article from the website?") && act("unpublish", "Unpublished")}>Unpublish</button>}
@@ -105,10 +111,38 @@ export default function Editor({ params }: { params: Promise<{ id: string }> }) 
           <div className="field"><label htmlFor="tg">Tags</label><input id="tg" type="text" value={tagText} disabled={locked} placeholder="Type a tag, press Enter" onChange={(e) => setTagText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTags(tagText); } }} onBlur={() => addTags(tagText)} />
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{f.tags.map((t) => <span key={t} className="badge">{t} <button type="button" aria-label={`Remove ${t}`} style={{ border: 0, background: "none", cursor: "pointer" }} onClick={() => set({ tags: f.tags.filter((x) => x !== t) })}>×</button></span>)}</div></div>
-          <small style={{ color: "var(--muted)" }}>Featured image and author selection arrive with the Media Library and Users phases.</small>
+          <div className="field"><label>Author</label><select value={f.authorId} disabled={locked} onChange={(e) => set({ authorId: e.target.value })}><option value="">No author shown</option>{authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+          {(["featuredImageId", "ogImageId"] as const).map((k) => (<div className="field" key={k}><label>{k === "featuredImageId" ? "Featured image" : "Social share image (Open Graph)"}</label>
+            {f[k] ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={imgUrl(f[k])} alt="" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", borderRadius: 16 }} /></> : <div className="empty" style={{ padding: 16 }}>No image</div>}
+            <div style={{ display: "flex", gap: 6 }}><button type="button" className="btn sm" disabled={locked} onClick={() => setPick(k)}>{f[k] ? "Change" : "Choose image"}</button>{f[k] && <button type="button" className="btn sm" disabled={locked} onClick={() => set({ [k]: "" })}>Remove</button>}</div></div>))}
         </div>
       </div>
     </div>
+    {pick && f.websiteId && <MediaPicker websiteId={f.websiteId} onClose={() => setPick(null)} onPick={(m) => { set({ [pick]: m.id }); setPick(null); }} />}
+    {showPv && site?.domain && <BlogPreview base={site.domain.replace(/\/$/, "")} onClose={() => setShowPv(false)} article={{
+      title: f.title, slug: f.slug, excerpt: f.excerpt, content: f.content, publishedAt: meta?.publishedAt || new Date().toISOString(),
+      category: (() => { const c = cats.find((x) => x.id === f.categoryId); return c ? { name: c.name, slug: c.slug } : null; })(),
+      author: authors.find((a) => a.id === f.authorId)?.name ?? null,
+      featuredImage: f.featuredImageId ? { url: window.location.origin + imgUrl(f.featuredImageId), alt: f.title } : null,
+      seo: { title: f.seoTitle || f.title, description: f.metaDescription || f.excerpt } }} />}
     {el}
   </>);
+}
+
+/** The article shown inside the real Elanster website design (the site's own article page), updating as you type. */
+function BlogPreview({ base, article, onClose }: { base: string; article: object; onClose: () => void }) {
+  const frame = useRef<HTMLIFrameElement>(null); const box = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false); const [mode, setMode] = useState<"desktop" | "tablet" | "phone">("desktop"); const [w, setW] = useState(900); const [h, setH] = useState(600);
+  useEffect(() => { const el = box.current; if (!el) return; const ro = new ResizeObserver(() => { setW(el.clientWidth); setH(el.clientHeight); }); ro.observe(el); setW(el.clientWidth); setH(el.clientHeight); return () => ro.disconnect(); }, []);
+  useEffect(() => { const on = (e: MessageEvent) => { if (e.source === frame.current?.contentWindow && e.data?.source === "elanster-site" && e.data.type === "ready") setReady(true); }; window.addEventListener("message", on); return () => window.removeEventListener("message", on); }, []);
+  useEffect(() => { if (ready) frame.current?.contentWindow?.postMessage({ source: "elanster-cms", type: "article", article }, "*"); }, [ready, article]);
+  const width = mode === "desktop" ? 1280 : mode === "tablet" ? 820 : 390; const scale = Math.min(1, w / width);
+  return (<div className="modal" onClick={onClose}><div style={{ width: "min(1240px,100%)", height: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+      <div className="seg">{(["desktop", "tablet", "phone"] as const).map((m) => <button key={m} className={mode === m ? "on" : ""} onClick={() => { setMode(m); setReady(false); }}>{m[0].toUpperCase() + m.slice(1)}</button>)}</div>
+      <button className="btn" onClick={onClose}>Close preview</button></div>
+    <div ref={box} style={{ flex: 1, minHeight: 0, overflow: "hidden", borderRadius: 18, background: "#fff", display: "flex", justifyContent: "center" }}>
+      <iframe ref={frame} key={mode} title="Article preview in the website design" src={`${base}/article.html?cms-preview=1`} onLoad={() => setReady(false)}
+        style={{ width, height: Math.round(h / scale), border: 0, transform: `scale(${scale})`, transformOrigin: "top center", flex: "none", background: "#fff" }} />
+    </div></div></div>);
 }
