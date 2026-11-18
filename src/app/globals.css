@@ -155,3 +155,6 @@ td { padding: 12px; border-top: 1px solid var(--line); vertical-align: middle; }
   .topbar { grid-template-columns: 1fr; justify-items: center; } .tb-left, .me { justify-self: center; } .nav { flex-wrap: wrap; justify-content: center; } .nav a span { display: inline; }
   .slide { width: 100vw; border-radius: 0; } .list-head { flex-direction: column; } .icon-btn.wide span, .icon-btn.wide kbd { display: none; } }
 @media (max-width: 560px) { .tbl th:nth-child(n+5), .tbl td:nth-child(n+5) { display: none; } .nav a span { font-size: 13px; } }
+.role-chip.big { font-size: 13px; vertical-align: middle; margin-left: 8px; }
+.stat-l { display: inline-flex; align-items: center; gap: 6px; } .count-pill { background: var(--orange); color: #fff; border-radius: 999px; padding: 1px 9px; font-size: 12px; margin-left: 6px; }
+.quick { display: grid; gap: 6px; } .quick a { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--panel); font-weight: 600; } .quick a:hover { background: var(--peach); }
