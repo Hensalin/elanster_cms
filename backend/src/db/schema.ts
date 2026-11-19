@@ -95,6 +95,11 @@ export const blogs = pgTable("blogs", {
   status: statusEnum("status").notNull().default("DRAFT"),
   authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
   authorName: text("author_name").notNull().default(""), // name shown on the website; empty = the author's account name
+  // Suggested changes to a live article (an editor's copy). The live article stays as it is until an admin approves.
+  pending: text("pending"),                                     // JSON of the edited fields, or null
+  pendingState: text("pending_state").notNull().default(""),   // "" (being edited), "WAITING" (sent for review), "CHANGES" (sent back)
+  pendingBy: text("pending_by").references(() => users.id, { onDelete: "set null" }),
+  pendingAt: timestamp("pending_at", { withTimezone: true }),
   categoryId: text("category_id").references(() => categories.id, { onDelete: "set null" }),
   featuredImageId: text("featured_image_id").references(() => media.id, { onDelete: "set null" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),

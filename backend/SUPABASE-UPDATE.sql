@@ -41,3 +41,9 @@ ALTER TABLE pages ADD COLUMN IF NOT EXISTS edited_by text REFERENCES users(id) O
 
 -- Author name shown on the website (free text, e.g. a guest writer)
 ALTER TABLE blogs ADD COLUMN IF NOT EXISTS author_name text NOT NULL DEFAULT '';
+
+-- Suggested changes to live articles (editor edits, admin approves)
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS pending text;
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS pending_state text NOT NULL DEFAULT '';
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS pending_by text REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS pending_at timestamptz;

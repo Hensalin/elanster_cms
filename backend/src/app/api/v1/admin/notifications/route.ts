@@ -30,6 +30,10 @@ export const GET = admin(async (_req, _c, user) => {
     const rev = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.status, "IN_REVIEW"), inArray(schema.blogs.websiteId, publishFor)),
       orderBy: desc(schema.blogs.updatedAt), limit: 15, columns: { id: true, title: true, updatedAt: true }, with: { website: { columns: { name: true } }, author: { columns: { name: true } } } });
     for (const b of rev) notes.push({ id: "r" + b.id, kind: "review", title: `Waiting for review: “${b.title}”`, text: `${b.author?.name ?? "Someone"} · ${b.website?.name ?? ""}`, href: `/content?open=blogs:${b.id}`, at: b.updatedAt.toISOString(), action: true });
+    const sug = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.pendingState, "WAITING"), inArray(schema.blogs.websiteId, publishFor)),
+      orderBy: desc(schema.blogs.pendingAt), limit: 15, columns: { id: true, title: true, pendingAt: true, pendingBy: true }, with: { website: { columns: { name: true } } } });
+    const sugNames = await nameMap(sug.map((x) => x.pendingBy));
+    for (const b of sug) notes.push({ id: "s" + b.id, kind: "review", title: `Changes waiting for review: “${b.title}”`, text: `${sugNames.get(b.pendingBy ?? "") ?? "Someone"} · ${b.website?.name ?? ""}`, href: `/content?open=blogs:${b.id}`, at: (b.pendingAt ?? new Date()).toISOString(), action: true });
     const prev = await db.query.pages.findMany({ where: and(isNull(schema.pages.deletedAt), eq(schema.pages.reviewState, "WAITING"), inArray(schema.pages.websiteId, publishFor)),
       orderBy: desc(schema.pages.reviewAt), limit: 15, columns: { id: true, title: true, reviewAt: true, reviewBy: true }, with: { website: { columns: { name: true } } } });
     const names = await nameMap(prev.map((x) => x.reviewBy));
@@ -39,6 +43,14 @@ export const GET = admin(async (_req, _c, user) => {
     const mine = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.authorId, user.id), inArray(schema.blogs.websiteId, all), ne(schema.blogs.reviewNote, ""), eq(schema.blogs.status, "DRAFT")),
       orderBy: desc(schema.blogs.updatedAt), limit: 10, columns: { id: true, title: true, reviewNote: true, updatedAt: true } });
     for (const b of mine) notes.push({ id: "c" + b.id, kind: "changes", title: `Changes requested on “${b.title}”`, text: b.reviewNote.slice(0, 120), href: `/content?open=blogs:${b.id}`, at: b.updatedAt.toISOString(), action: true });
+    const mySug = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.pendingBy, user.id), inArray(schema.blogs.websiteId, all)),
+      orderBy: desc(schema.blogs.pendingAt), limit: 10, columns: { id: true, title: true, pending: true, pendingState: true, pendingAt: true, reviewNote: true } });
+    for (const b of mySug) {
+      const at = (b.pendingAt ?? new Date()).toISOString();
+      if (b.pendingState === "CHANGES") notes.push({ id: "sc" + b.id, kind: "changes", title: `Changes requested on “${b.title}”`, text: b.reviewNote.slice(0, 120), href: `/content?open=blogs:${b.id}`, at, action: true });
+      else if (!isSuper && !b.pending && b.pendingAt && +b.pendingAt > Date.now() - 14 * 864e5)
+        notes.push({ id: "sl" + b.id, kind: "live", title: `Your changes to “${b.title}” are live`, text: "Approved and published", href: `/content?open=blogs:${b.id}`, at, action: false });
+    }
     const myPages = await db.query.pages.findMany({ where: and(isNull(schema.pages.deletedAt), eq(schema.pages.reviewBy, user.id), inArray(schema.pages.websiteId, all)),
       orderBy: desc(schema.pages.reviewAt), limit: 15, columns: { id: true, title: true, reviewState: true, reviewNote: true, reviewAt: true, publishedAt: true }, with: { website: { columns: { name: true } } } });
     for (const pg of myPages) {

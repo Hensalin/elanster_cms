@@ -24,12 +24,16 @@ export const PUT = admin<Ctx>(async (req, { params }, user) => {
   const r = await load((await params).id, user);
   if (r.err) return r.err;
   const { b, role } = r;
-  // Editors may not change content that is already live or scheduled.
-  if (!canPublish(role ?? null) && (b.status === "PUBLISHED" || b.status === "SCHEDULED"))
-    return fail("Only a Website Admin can edit published content", 403);
   const d = blogInput.parse(await req.json());
   if (d.websiteId !== b.websiteId) return fail("An article cannot be moved to another website", 400);
   const bad = await checkBlogRefs(d, b.websiteId); if (bad) return fail(bad, 422);
+  // Editors cannot change a live article directly: their edits are kept as suggested changes for an admin to approve.
+  if (!canPublish(role ?? null) && (b.status === "PUBLISHED" || b.status === "SCHEDULED")) {
+    if (b.pendingState === "WAITING") return fail("Your changes are waiting for review. Take them back to edit again.", 409);
+    if (b.pending && b.pendingBy && b.pendingBy !== user.id) return fail("Someone else is already suggesting changes to this article.", 409);
+    await db.update(schema.blogs).set({ pending: JSON.stringify(d), pendingBy: user.id, pendingAt: new Date() }).where(eq(schema.blogs.id, b.id));
+    return json(await blogWithRelations(b.id));
+  }
   const slug = d.slug ? await uniqueBlogSlug(b.websiteId, d.slug, b.id) : b.slug;
   if (b.title !== d.title || b.content !== d.content || b.excerpt !== d.excerpt)
     await saveVersion("blog", b.id, b.websiteId, user.id, { title: b.title, excerpt: b.excerpt, content: b.content, seoTitle: b.seoTitle, metaDescription: b.metaDescription });

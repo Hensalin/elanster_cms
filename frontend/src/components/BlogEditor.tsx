@@ -30,9 +30,12 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
     if (id === "new") { let pref = ""; try { pref = localStorage.getItem("cms.site") || ""; } catch { /* ignore */ }
       setF((x) => ({ ...x, websiteId: s.find((w) => w.id === pref)?.id ?? s[0]?.id ?? "", authorId: m.user.id })); setTimeout(() => titleRef.current?.focus(), 50); return; }
     try { const b = await api(`/api/v1/admin/blogs/${id}`); setMeta(b);
-      setF({ websiteId: b.websiteId, title: b.title, slug: b.slug, excerpt: b.excerpt, content: b.content, categoryId: b.categoryId ?? "",
+      const live = { websiteId: b.websiteId, title: b.title, slug: b.slug, excerpt: b.excerpt, content: b.content, categoryId: b.categoryId ?? "",
         tags: b.tagLinks.map((l: { tag: { name: string } }) => l.tag.name), seoTitle: b.seoTitle, metaDescription: b.metaDescription, canonicalUrl: b.canonicalUrl,
-        robots: b.robots, ogTitle: b.ogTitle, ogDescription: b.ogDescription, featuredImageId: b.featuredImageId ?? "", ogImageId: b.ogImageId ?? "", authorId: b.authorId ?? "", authorName: b.authorName ?? "" });
+        robots: b.robots, ogTitle: b.ogTitle, ogDescription: b.ogDescription, featuredImageId: b.featuredImageId ?? "", ogImageId: b.ogImageId ?? "", authorId: b.authorId ?? "", authorName: b.authorName ?? "" };
+      // A live article with suggested changes opens on the suggested copy (the live article itself is unchanged).
+      let sug: Partial<typeof empty> | null = null; try { sug = b.pending ? JSON.parse(b.pending) : null; } catch { sug = null; }
+      setF(sug ? { ...live, ...Object.fromEntries(Object.entries(sug).map(([k, v]) => [k, v ?? ""])) } as typeof empty : live);
     } catch (e) { toast((e as Error).message, true); }
   })(); }, [id]); // eslint-disable-line
   useEffect(() => { if (f.websiteId) api<Cat[]>(`/api/v1/admin/categories?website=${f.websiteId}`).then(setCats).catch(() => setCats([])); }, [f.websiteId]);
@@ -41,7 +44,12 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
   const role = me ? (me.user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : me.websiteRoles[f.websiteId]) : null;
   const canPublish = role === "SUPER_ADMIN" || role === "WEBSITE_ADMIN";
   const status: string = meta?.status ?? "DRAFT";
-  const locked = !canPublish && (status === "PUBLISHED" || status === "SCHEDULED");
+  const isLive = status === "PUBLISHED" || status === "SCHEDULED";
+  const pState: string = meta?.pendingState ?? ""; const hasSug = !!meta?.pending; const sugMine = hasSug && meta?.pendingBy === me?.user?.id;
+  const sugBy = authors.find((a) => a.id === meta?.pendingBy)?.name ?? "An editor";
+  const suggest = !canPublish && isLive;   // editor on a live article: edits become a suggested copy
+  const reviewing = canPublish && hasSug && pState === "WAITING";   // admin checking suggested changes
+  const locked = (suggest && (pState === "WAITING" || (hasSug && !sugMine))) || reviewing;
 
   const save = useCallback(async (quiet = false) => {
     if (!f.title.trim()) { toast("Add a title first", true); titleRef.current?.focus(); return null; }
@@ -50,16 +58,18 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
       const body = { ...f, categoryId: f.categoryId || null, featuredImageId: f.featuredImageId || null, ogImageId: f.ogImageId || null, authorId: f.authorId || null };
       const b = isNew ? await api("/api/v1/admin/blogs", { method: "POST", body }) : await api(`/api/v1/admin/blogs/${curId}`, { method: "PUT", body });
       setMeta(b); setDirty(false); setSavedAt(new Date());
-      setF((x) => ({ ...x, slug: b.slug, excerpt: x.excerpt || b.excerpt, featuredImageId: x.featuredImageId || b.featuredImageId || "" }));
-      if (!quiet) toast(status === "PUBLISHED" ? "Live article updated" : "Draft saved");
+      if (!suggest) setF((x) => ({ ...x, slug: b.slug, excerpt: x.excerpt || b.excerpt, featuredImageId: x.featuredImageId || b.featuredImageId || "" }));
+      if (!quiet) toast(suggest ? "Changes saved. The live article is not changed until an admin approves." : status === "PUBLISHED" ? "Live article updated" : "Draft saved");
       if (isNew) { setCurId(b.id); onCreated?.(b.id); } onChanged?.();
       return b;
     } catch (e) { toast((e as Error).message, true); return null; } finally { setBusy(false); }
-  }, [f, curId, isNew, status]); // eslint-disable-line
+  }, [f, curId, isNew, status, suggest]); // eslint-disable-line
 
   async function act(action: string, ok: string, extra: object = {}) {
     const b = dirty || isNew ? await save(true) : meta; if (!b) return; setBusy(true);
-    try { const u = await api(`/api/v1/admin/blogs/${b.id}/publish`, { method: "POST", body: { action, ...extra } }); setMeta({ ...b, ...u }); toast(ok); onChanged?.(); }
+    try { const u = await api(`/api/v1/admin/blogs/${b.id}/publish`, { method: "POST", body: { action, ...extra } }); setMeta({ ...b, ...u }); toast(ok); onChanged?.();
+      if (action === "approve_changes" || action === "discard_changes") setF((x) => ({ ...x, title: u.title, slug: u.slug, excerpt: u.excerpt, content: u.content, categoryId: u.categoryId ?? "", featuredImageId: u.featuredImageId ?? "", authorName: u.authorName ?? "",
+        tags: (u.tagLinks ?? []).map((l: { tag: { name: string } }) => l.tag.name) })); }
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   }
   const primary = () => canPublish ? act("publish", status === "PUBLISHED" ? "Live article updated" : "Published — it is on your website now") : act("submit", "Sent for review");
@@ -70,17 +80,17 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
   useEffect(() => { // Ctrl+S save · Ctrl+Enter publish · autosave drafts after 5 seconds · warn before leaving unsaved
     const k = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!locked) save(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); if (!locked) { if (status === "PUBLISHED") save(); else primary(); } }
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); if (!locked && !suggest) { if (status === "PUBLISHED") save(); else primary(); } }
     };
     const u = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("keydown", k); window.addEventListener("beforeunload", u);
-    const t = dirty && !locked && status !== "PUBLISHED" && f.title.trim() ? setTimeout(() => { save(true); }, 5000) : undefined;
+    const t = dirty && !locked && (status !== "PUBLISHED" || suggest) && f.title.trim() ? setTimeout(() => { save(true); }, 5000) : undefined;
   return () => { window.removeEventListener("keydown", k); window.removeEventListener("beforeunload", u); if (t) clearTimeout(t); };
   }); // eslint-disable-line
 
   // Closing the panel never loses work: unsaved drafts are saved on the way out.
   const exitSave = useRef<() => void>(() => {});
-  exitSave.current = () => { if (dirty && !locked && status !== "PUBLISHED" && f.title.trim()) save(true); };
+  exitSave.current = () => { if (dirty && !locked && (status !== "PUBLISHED" || suggest) && f.title.trim()) save(true); };
   useEffect(() => () => exitSave.current(), []);
   const addCat = async () => {
     const name = (newCat ?? "").trim(); if (!name) { setNewCat(null); return; }
@@ -97,15 +107,32 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
         <Status s={status} /><span className="mut qe-saved" aria-live="polite">{saveLabel}</span></div>
       <div className="qe-bar-r">
         {site?.domain && <button className="btn sm" onClick={() => setShowPv(true)}><Eye size={14} /> Preview</button>}
+        {suggest ? <>   {/* editor on a live article */}
+          {pState === "WAITING" ? (sugMine && <button className="btn sm" disabled={busy} onClick={() => act("withdraw_changes", "Taken back. You can edit again.")}>Take back to edit</button>)
+          : !locked && <>
+            {hasSug && <button className="btn sm" disabled={busy} onClick={() => confirm("Throw away your suggested changes?") && act("discard_changes", "Your changes were thrown away")}>Discard my changes</button>}
+            <button className="btn sm" disabled={busy || !dirty} onClick={() => save()}>Save changes</button>
+            <button className="btn orange" disabled={busy || (!dirty && !hasSug)} onClick={() => act("submit_changes", "Sent for review. An admin will publish your changes or send them back.")}><Send size={15} /> Send for review</button></>}
+        </> : reviewing ? <>   {/* admin checking an editor's suggested changes */}
+          <button className="btn sm" disabled={busy} onClick={() => { const note = window.prompt("What should the editor change? They will see this note."); if (note?.trim()) act("reject_changes", "Sent back to the editor", { note }); }}>Request changes</button>
+          <button className="btn sm" disabled={busy} onClick={() => confirm("Throw away these suggested changes? The live article stays as it is.") && act("discard_changes", "Suggested changes thrown away")}>Discard</button>
+          <button className="btn orange" disabled={busy} onClick={() => act("approve_changes", "Approved. The live article is updated.")}><Check size={15} /> Approve &amp; publish changes</button>
+        </> : <>
         {!locked && status !== "PUBLISHED" && <button className="btn sm" disabled={busy || (!dirty && !isNew)} onClick={() => save()}>Save draft</button>}
         {canPublish && status === "IN_REVIEW" && <button className="btn sm" disabled={busy} onClick={requestChanges}>Request changes</button>}
         {canPublish && status === "PUBLISHED" && <button className="btn sm danger" disabled={busy} onClick={() => confirm("Take this article off the website?") && act("unpublish", "Unpublished")}>Unpublish</button>}
         {!locked && <button className="btn orange" disabled={busy || (!canPublish && status === "IN_REVIEW") || (status === "PUBLISHED" && !dirty)} onClick={() => (status === "PUBLISHED" ? save() : primary())} title="Ctrl+Enter">
-          {canPublish ? <Check size={15} /> : <Send size={15} />} {primaryLabel}</button>}
+          {canPublish ? <Check size={15} /> : <Send size={15} />} {primaryLabel}</button>}</>}
       </div>
     </div>
     {meta?.reviewNote && status === "DRAFT" && <div className="note-banner" role="note"><b>Changes requested:</b> {meta.reviewNote}<small>Make the changes, then click Send for review again.</small></div>}
-    {locked && <div className="note-banner" role="note">This article is live. Only a Website Admin can change it.</div>}
+    {suggest && !hasSug && <div className="note-banner" role="note"><b>This article is live.</b> Edit it here and press Send for review. The website keeps showing the current version until an admin approves your changes.</div>}
+    {suggest && hasSug && pState === "" && sugMine && <div className="note-banner" role="note"><b>You are editing a copy of this live article.</b> When you are done, press Send for review.</div>}
+    {suggest && hasSug && !sugMine && <div className="note-banner" role="note">{sugBy} is already suggesting changes to this article. You can edit it again after an admin handles them.</div>}
+    {suggest && pState === "WAITING" && sugMine && <div className="note-banner" role="note"><b>Waiting for review.</b> Your changes are locked until an admin publishes them or sends them back.</div>}
+    {hasSug && pState === "CHANGES" && <div className="note-banner" role="note"><b>Changes requested:</b> {meta?.reviewNote} {suggest && <small>Edit the copy, then press Send for review again.</small>}</div>}
+    {reviewing && <div className="note-banner" role="note"><b>{sugBy} suggested changes to this live article{meta?.pendingAt ? ` on ${fmt(meta.pendingAt)}` : ""}.</b> You are looking at the suggested version. Approve to publish it, or ask for changes.</div>}
+    {canPublish && hasSug && pState !== "WAITING" && <div className="note-banner" role="note">{sugBy} is editing a copy of this article (not sent for review yet). Saving here changes the live article directly.</div>}
 
     <div className="qe-main">
       <textarea ref={titleRef} className="qe-title" rows={1} placeholder="Article title" aria-label="Title" value={f.title} disabled={locked} maxLength={200}

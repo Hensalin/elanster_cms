@@ -11,8 +11,9 @@ type Row = { id: string; title: string; slug: string; status: string; website: s
 type Sort = { key: keyof Row; dir: 1 | -1 };
 
 const LABEL: Record<string, string> = { DRAFT: "Draft", IN_REVIEW: "In review", SCHEDULED: "Scheduled", PUBLISHED: "Live", UNPUBLISHED: "Unpublished" };
-const Chip = ({ r }: { r: Row }) => r.review === "WAITING" ? <span className="badge IN_REVIEW" title="Sent for review, waiting for an admin">Waiting for review</span>
+const Chip = ({ r }: { r: Row }) => r.review === "WAITING" ? <span className="badge IN_REVIEW" title="Sent for review, waiting for an admin">{r.kind === "page" || r.status !== "PUBLISHED" ? "Waiting for review" : "Live · changes waiting"}</span>
   : (r.changes && r.status === "DRAFT") || r.review === "CHANGES" ? <span className="badge UNPUBLISHED" title="An admin asked for changes">Changes requested</span>
+  : r.review === "EDITING" ? <span className="badge SCHEDULED" title="Someone is editing a copy; the live article is unchanged">Live · changes in progress</span>
   : r.edited ? <span className="badge SCHEDULED" title="Has saved changes that are not live yet">{r.status === "PUBLISHED" ? "Live · unpublished changes" : "Draft changes"}</span>
   : r.kind === "page" && r.status !== "PUBLISHED" ? <span className="badge UNPUBLISHED" title="The website shows its own text">No changes</span>
   : <span className={"badge " + r.status}>{LABEL[r.status] ?? r.status}</span>;
@@ -55,7 +56,7 @@ function ContentScreen() {
       } else {
         const p = new URLSearchParams({ limit: "20", page: String(page) }); if (site) p.set("website", site); if (q) p.set("q", q); if (status) p.set("status", status);
         const d = await api("/api/v1/admin/blogs?" + p); if (seq !== loadSeq.current) return;
-        setRows(d.items.map((b: any): Row => ({ id: b.id, title: b.title, slug: b.slug, status: b.status, website: b.website?.name ?? "", websiteId: b.websiteId, category: b.category?.name ?? "", author: b.authorName || b.author?.name || "", updatedAt: b.updatedAt, edited: false, note: "", img: b.featuredImage?.id ? `/api/v1/media/${b.featuredImage.id}` : (b.featuredImageId ? `/api/v1/media/${b.featuredImageId}` : ""), changes: !!b.reviewNote })));
+        setRows(d.items.map((b: any): Row => ({ id: b.id, title: b.title, slug: b.slug, status: b.status, website: b.website?.name ?? "", websiteId: b.websiteId, category: b.category?.name ?? "", author: b.authorName || b.author?.name || "", updatedAt: b.updatedAt, edited: false, note: "", img: b.featuredImage?.id ? `/api/v1/media/${b.featuredImage.id}` : (b.featuredImageId ? `/api/v1/media/${b.featuredImageId}` : ""), changes: !!b.reviewNote, review: b.pending ? (b.pendingState || "EDITING") : "" })));
         setPages(d.pages);
       }
     } catch (e) { setRows([]); toast((e as Error).message, true); }

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { accessibleWebsiteIds, focusIds } from "@/lib/auth";
 import { admin, json } from "@/lib/http";
@@ -41,13 +41,23 @@ export const GET = admin(async (req, _c, user) => {
   const myPageDrafts = unpub.filter((p) => p.editedBy === user.id && p.reviewState !== "WAITING").map((p) => pageItem(p, "DRAFT"));
   const myPageReview = waiting.filter((p) => p.reviewBy === user.id).map((p) => pageItem(p, "IN_REVIEW"));
   const pageChanges = pageRows.filter((p) => p.reviewState === "CHANGES" && p.reviewBy === user.id).map((p) => ({ id: p.id, title: `Page: ${p.title}`, reviewNote: p.reviewNote, href: `/pages/${p.id}` }));
+  // Suggested changes to live articles count as review work too.
+  const sug = await db.query.blogs.findMany({ where: and(blogWhere(), isNotNull(schema.blogs.pending)), columns: { id: true, title: true, pendingState: true, pendingBy: true, pendingAt: true, reviewNote: true, updatedAt: true }, with: withSite });
+  const sugItem = (b: (typeof sug)[number], status: string) => ({ id: b.id, kind: "article", href: `/content?open=blogs:${b.id}`, title: `Changes: ${b.title}`, website: b.website,
+    author: b.pendingBy ? { name: names.get(b.pendingBy) ?? "" } : null, updatedAt: b.pendingAt ?? b.updatedAt, status, reviewNote: b.reviewNote });
+  const sugWaiting = sug.filter((b) => b.pendingState === "WAITING");
+  for (const b of sug) if (b.pendingBy && !names.has(b.pendingBy)) { const [u] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, b.pendingBy)); if (u) names.set(b.pendingBy, u.name); }
+  queue.push(...sugWaiting.map((b) => sugItem(b, "IN_REVIEW"))); queue.sort(byDate);
+  myPageReview.push(...sugWaiting.filter((b) => b.pendingBy === user.id).map((b) => sugItem(b, "IN_REVIEW")));
+  myPageDrafts.push(...sug.filter((b) => b.pendingBy === user.id && b.pendingState === "").map((b) => sugItem(b, "DRAFT")));
+  pageChanges.push(...sug.filter((b) => b.pendingBy === user.id && b.pendingState === "CHANGES").map((b) => ({ id: b.id, title: b.title, reviewNote: b.reviewNote, href: `/content?open=blogs:${b.id}` })));
   const by = (s: string) => statusRows.find((r) => r.s === s)?.n ?? 0;
   const level: "super" | "admin" | "editor" = isSuper ? "super" : adminRows[0].n > 0 ? "admin" : "editor";
   const myDrafts = mine.filter((b) => b.status === "DRAFT").slice(0, 8), myReview = mine.filter((b) => b.status === "IN_REVIEW").slice(0, 8);
   const users = userRows.reduce((a, r) => a + r.n, 0), pendingUsers = userRows.find((r) => !r.active)?.n ?? 0;
   return json({ pendingUsers, level, websites, pages, users, pageStats,
     changesRequested: [...myDrafts.filter((b) => b.reviewNote).map((b) => ({ id: b.id, title: b.title, reviewNote: b.reviewNote, href: `/content?open=blogs:${b.id}` })), ...pageChanges],
-    published: by("PUBLISHED"), drafts: by("DRAFT"), review: by("IN_REVIEW") + waiting.length, reviewQueue: queue,
+    published: by("PUBLISHED"), drafts: by("DRAFT"), review: by("IN_REVIEW") + waiting.length + sugWaiting.length, reviewQueue: queue,
     myDrafts: [...myDrafts.map(tagBlog), ...myPageDrafts].sort(byDate).slice(0, 8), myReview: [...myReview.map(tagBlog), ...myPageReview].sort(byDate).slice(0, 8),
     recentUpdated: recentUpdated.map(tagBlog), recentPublished: recentPublished.map(tagBlog), activity });
 });
