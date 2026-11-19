@@ -16,6 +16,7 @@ const INTRO: Record<Level, { title: string; text: string; chip: string }> = {
   editor: { title: "My work", chip: "Editor", text: "Write and edit content. When it is ready, send it for review — an admin publishes it." },
 };
 
+
 function Ring({ pct, color }: { pct: number; color: string }) {
   const r = 26, c = 2 * Math.PI * r;
   return (<svg className="ring" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label={`${pct}%`}>
@@ -24,19 +25,39 @@ function Ring({ pct, color }: { pct: number; color: string }) {
     <text x="32" y="36.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--ink)">{pct}%</text></svg>);
 }
 
-function WeekCard({ items }: { items: { id: string; title: string; when: string; kind: string }[] }) {
-  const today = new Date(); const start = new Date(today); start.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+type WeekItem = { id: string; title: string; when: string; kind: string; href: string; site?: string };
+/** A week at a glance: pick a day to see what was published or sent for review that day. */
+function WeekCard({ items, tall }: { items: WeekItem[]; tall?: boolean }) {
+  const today = new Date(); const day0 = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
   const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  const week = items.filter((x) => { const d = new Date(x.when); return d >= start && d < new Date(start.getTime() + 7 * 864e5); });
-  const shown = (week.length ? week : items).slice(0, 3);
-  return (<div className="card s4 week">
-    <div className="card-h"><h2>{today.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2><span className="mut" style={{ fontSize: 12.5 }}>This week</span></div>
-    <div className="week-strip">{days.map((d) => { const has = items.some((x) => same(new Date(x.when), d));
-      return <div key={d.toISOString()} className={"wd" + (same(d, today) ? " today" : "")}><small>{d.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2)}</small><b>{d.getDate()}</b>{has && <i />}</div>; })}</div>
-    {shown.length ? shown.map((x) => <div className="week-item" key={x.id + x.kind}><span className="wk-time">{new Date(x.when).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span>
-      <Link href={`/content?open=blogs:${x.id}`} className="wk-box"><b>{x.title}</b><small>{x.kind} · {new Date(x.when).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</small></Link></div>)
-      : <div className="empty-art"><QuietArt /><p>Nothing scheduled this week.</p></div>}
+  const [offset, setOffset] = useState(0);   // weeks back/forward from this week
+  const start = day0(today); start.setDate(start.getDate() - ((today.getDay() + 6) % 7) + offset * 7);
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+  const onDay = (d: Date) => items.filter((x) => same(new Date(x.when), d)).sort((a, b) => +new Date(b.when) - +new Date(a.when));
+  const firstBusy = [...days].reverse().find((d) => d <= today && onDay(d).length);
+  const [picked, setPicked] = useState<string | null>(null);
+  const sel = days.find((d) => d.toDateString() === picked) ?? (days.some((d) => same(d, today)) && onDay(today).length ? today : firstBusy ?? (offset === 0 ? today : days[0]));
+  const list = onDay(sel);
+  const label = start.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return (<div className={"card s4 week" + (tall ? " tall" : "")}>
+    <div className="card-h wk-head"><h2>{label}</h2>
+      <div className="wk-nav">
+        <button aria-label="Previous week" onClick={() => { setOffset(offset - 1); setPicked(null); }}>‹</button>
+        <button className={"wk-today" + (offset === 0 ? " on" : "")} onClick={() => { setOffset(0); setPicked(today.toDateString()); }}>Today</button>
+        <button aria-label="Next week" onClick={() => { setOffset(offset + 1); setPicked(null); }}>›</button></div></div>
+    <div className="week-strip" role="tablist" aria-label="Days of the week">{days.map((d) => { const n = onDay(d).length;
+      return <button key={d.toISOString()} role="tab" aria-selected={same(d, sel)} className={"wd" + (same(d, today) ? " today" : "") + (same(d, sel) ? " sel" : "") + (n ? " busy" : "")}
+        onClick={() => setPicked(d.toDateString())} title={n ? `${n} update${n > 1 ? "s" : ""}` : "Nothing this day"}>
+        <small>{d.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2)}</small><b>{d.getDate()}</b>
+        <span className="wd-dots">{Array.from({ length: Math.min(n, 3) }, (_, i) => <i key={i} />)}</span></button>; })}</div>
+    <div className="wk-day"><b>{same(sel, today) ? "Today" : sel.toLocaleDateString(undefined, { weekday: "long" })}</b>
+      <span>{sel.toLocaleDateString(undefined, { day: "numeric", month: "long" })}</span>
+      <em>{list.length ? `${list.length} update${list.length > 1 ? "s" : ""}` : ""}</em></div>
+    {list.length ? <ul className="wk-list">{list.map((x) => <li key={x.id + x.kind}>
+        <span className="wk-time">{new Date(x.when).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span>
+        <Link href={x.href} className="wk-box"><b>{x.title.replace(/^[‘'"“]+/, "")}</b>
+          <small><span className={"wk-kind " + (x.kind === "Published" ? "pub" : "rev")}>{x.kind}</span>{x.site ? ` · ${x.site}` : ""}</small></Link></li>)}</ul>
+      : <div className="wk-empty">Nothing published or sent for review this day.</div>}
   </div>);
 }
 
@@ -51,12 +72,13 @@ export default function Dashboard() {
   useEffect(() => { load(); }, [site]); // eslint-disable-line
   const [me, setMe] = useState<{ name: string } | null>(null); const [live, setLive] = useState(""); const [linked, setLinked] = useState<boolean | null>(null);
   useEffect(() => { api("/api/v1/auth/me").then((r) => setMe(r.user)).catch(() => {});
+    // Connected = the live website read content with its key in the last 7 days.
     api<any[]>("/api/v1/admin/websites").then((w) => { const a = w.find((x) => x.id === site) ?? w.find((x) => x.active && x.domain); setLive(a?.domain ?? "");
-      // Really connected = the live website read content with its key in the last 7 days.
       setLinked(!!a && a.active && !!a.lastSeen && Date.now() - +new Date(a.lastSeen) < 7 * 864e5); }).catch(() => {}); }, [site]);
   if (err) return <p className="err-text" role="alert">{err}</p>;
   if (!s) return <div className="skel" aria-busy="true"><div /><div /><div /></div>;
-  const L = INTRO[s.level]; const canPub = s.level !== "editor";
+  const L = INTRO[s.level];
+ const canPub = s.level !== "editor";
   const act = async (id: string, action: "publish" | "unpublish") => {
     try { await api(`/api/v1/admin/blogs/${id}/publish`, { method: "POST", body: { action } }); toast(action === "publish" ? "Published" : "Sent back to draft"); load(); } catch (e) { toast((e as Error).message, true); }
   };
@@ -96,10 +118,11 @@ export default function Dashboard() {
         {list(s.reviewQueue.slice(0, 3), "All caught up. Nothing is waiting for review.", "updatedAt", (b) => b.kind === "page" ? <Link className="btn sm orange" href={b.href}>Review</Link> : <button className="btn sm orange" disabled={!canPub} onClick={() => act(b.id, "publish")}>Publish</button>)}</div>
       <div className="card s4"><div className="card-h"><h2>Recently published</h2><Link className="linkish" href="/content">See all</Link></div>
         {list(s.recentPublished.slice(0, 3), "Nothing published yet.", "publishedAt", (b) => <button className="btn sm" onClick={() => act(b.id, "unpublish")}>Unpublish</button>)}</div>
-      <WeekCard items={[...s.recentPublished.map((b: any) => ({ id: b.id, title: b.title, when: b.publishedAt, kind: "Published" })), ...s.reviewQueue.map((b: any) => ({ id: b.kind + b.id, title: b.title, when: b.updatedAt, kind: "Sent for review" }))].filter((x) => x.when).sort((x, y) => +new Date(y.when) - +new Date(x.when))} />
+      <WeekCard items={[...s.recentPublished.map((b: any) => ({ id: b.id, title: b.title, when: b.publishedAt, kind: "Published", href: b.href, site: b.website?.name })),
+        ...s.reviewQueue.map((b: any) => ({ id: b.kind + b.id, title: b.title, when: b.updatedAt, kind: "Sent for review", href: b.href, site: b.website?.name }))].filter((x) => x.when)} />
       <div className="card s5"><div className="card-h"><h2>{s.level === "super" ? "Recent activity" : "Activity on your websites"}</h2><Link className="linkish" href="/activity">Open log</Link></div>
         {s.activity.length ? <ul className="feed">{s.activity.slice(0, 4).map((a) => <li key={a.id}><span className="feed-av" aria-hidden>{(a.user?.name ?? "S").slice(0, 1)}</span>
-          <span className="feed-t">{a.summary}<small>{a.user?.name ?? "System"}</small></span><span className="feed-d">{fmt(a.createdAt)}</span></li>)}</ul>
+          <span className="feed-t">{a.summary ? a.summary[0].toUpperCase() + a.summary.slice(1) : ""}<small>{a.user?.name ?? "System"}</small></span><span className="feed-d">{fmt(a.createdAt)}</span></li>)}</ul>
           : <div className="empty-art"><QuietArt /><p>No activity yet.</p></div>}</div>
       {linked ? <div className="promo promo--ok s2"><PromoArt /><h3>You&apos;re live</h3><p>Your website reads from the CMS. What you publish appears there within seconds.</p>
         <Link className="btn promo-btn" href="/content?new=1">Write an article</Link></div>

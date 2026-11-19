@@ -14,6 +14,7 @@ export const blogInput = z.object({
   tags: z.array(z.string().max(40)).max(20).default([]),
   featuredImageId: z.string().nullable().optional(),
   authorId: z.string().nullable().optional(),
+  authorName: z.string().max(120).optional(),
   seoTitle: z.string().max(200).default(""),
   metaDescription: z.string().max(400).default(""),
   canonicalUrl: z.string().max(500).default(""),
@@ -81,6 +82,7 @@ export const blogColumns = (d: BlogInput) => ({
   categoryId: d.categoryId || null,
   featuredImageId: d.featuredImageId || firstImageId(d.content),
   authorId: d.authorId || null,
+  ...(d.authorName !== undefined ? { authorName: d.authorName.trim() } : {}),
   seoTitle: d.seoTitle, metaDescription: d.metaDescription, canonicalUrl: d.canonicalUrl,
   robots: d.robots, ogTitle: d.ogTitle, ogDescription: d.ogDescription, ogImageId: d.ogImageId || null,
 });

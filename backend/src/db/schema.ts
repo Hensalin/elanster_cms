@@ -94,6 +94,7 @@ export const blogs = pgTable("blogs", {
   content: text("content").notNull().default(""), // sanitized HTML
   status: statusEnum("status").notNull().default("DRAFT"),
   authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
+  authorName: text("author_name").notNull().default(""), // name shown on the website; empty = the author's account name
   categoryId: text("category_id").references(() => categories.id, { onDelete: "set null" }),
   featuredImageId: text("featured_image_id").references(() => media.id, { onDelete: "set null" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),

@@ -55,7 +55,7 @@ function ContentScreen() {
       } else {
         const p = new URLSearchParams({ limit: "20", page: String(page) }); if (site) p.set("website", site); if (q) p.set("q", q); if (status) p.set("status", status);
         const d = await api("/api/v1/admin/blogs?" + p); if (seq !== loadSeq.current) return;
-        setRows(d.items.map((b: any): Row => ({ id: b.id, title: b.title, slug: b.slug, status: b.status, website: b.website?.name ?? "", websiteId: b.websiteId, category: b.category?.name ?? "", author: b.author?.name ?? "", updatedAt: b.updatedAt, edited: false, note: "", img: b.featuredImage?.id ? `/api/v1/media/${b.featuredImage.id}` : (b.featuredImageId ? `/api/v1/media/${b.featuredImageId}` : ""), changes: !!b.reviewNote })));
+        setRows(d.items.map((b: any): Row => ({ id: b.id, title: b.title, slug: b.slug, status: b.status, website: b.website?.name ?? "", websiteId: b.websiteId, category: b.category?.name ?? "", author: b.authorName || b.author?.name || "", updatedAt: b.updatedAt, edited: false, note: "", img: b.featuredImage?.id ? `/api/v1/media/${b.featuredImage.id}` : (b.featuredImageId ? `/api/v1/media/${b.featuredImageId}` : ""), changes: !!b.reviewNote })));
         setPages(d.pages);
       }
     } catch (e) { setRows([]); toast((e as Error).message, true); }

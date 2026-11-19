@@ -134,7 +134,7 @@ export function RichEditor({ value, onChange, websiteId }: { value: string; onCh
       <button type="button" className="btn danger" onClick={() => c().deleteTable().run()}>Delete table</button>
     </div>}
     <div className="tt"><EditorContent editor={editor} /></div>
-    <div className="tt-foot"><span>{st.words} words</span><span>{msg || "Tip: paste or drag a picture straight into the article to upload it."}</span></div>
+    <div className="tt-foot"><span>{st.words} words</span><span>{msg || "Paste from Word or Google Docs, or drop a picture in · Ctrl+S saves · Ctrl+Enter publishes"}</span></div>
     {pick && websiteId && <MediaPicker websiteId={websiteId} onClose={() => setPick(false)} onPick={(m) => {
       setPick(false);
       if (st.image) c().updateAttributes("image", { src: m.url, alt: m.altText || img?.alt || "" }).run();

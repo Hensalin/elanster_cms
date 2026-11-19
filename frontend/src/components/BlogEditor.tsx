@@ -9,7 +9,7 @@ import { ImageDrop } from "@/components/ImageDrop";
 const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
 const empty = { websiteId: "", title: "", slug: "", excerpt: "", content: "", categoryId: "", tags: [] as string[],
   seoTitle: "", metaDescription: "", canonicalUrl: "", robots: "index,follow", ogTitle: "", ogDescription: "",
-  featuredImageId: "", ogImageId: "", authorId: "" };
+  featuredImageId: "", ogImageId: "", authorId: "", authorName: "" };
 type Site = { id: string; name: string; domain: string };
 type Cat = { id: string; name: string; slug: string; color?: string };
 
@@ -21,7 +21,7 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
   const [authors, setAuthors] = useState<{ id: string; name: string }[]>([]);
   const [tagText, setTagText] = useState(""); const [slugEdited, setSlugEdited] = useState(id !== "new");
   const [sched, setSched] = useState(""); const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false); const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [more, setMore] = useState(false); const [showPv, setShowPv] = useState(false); const [newCat, setNewCat] = useState<string | null>(null);
+  const [more, setMore] = useState(true); const [showPv, setShowPv] = useState(false); const [newCat, setNewCat] = useState<string | null>(null);
   const { toast, el } = useToast(); const titleRef = useRef<HTMLTextAreaElement>(null);
   const set = (p: Partial<typeof empty>) => { setF((x) => ({ ...x, ...p })); setDirty(true); };
 
@@ -32,7 +32,7 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
     try { const b = await api(`/api/v1/admin/blogs/${id}`); setMeta(b);
       setF({ websiteId: b.websiteId, title: b.title, slug: b.slug, excerpt: b.excerpt, content: b.content, categoryId: b.categoryId ?? "",
         tags: b.tagLinks.map((l: { tag: { name: string } }) => l.tag.name), seoTitle: b.seoTitle, metaDescription: b.metaDescription, canonicalUrl: b.canonicalUrl,
-        robots: b.robots, ogTitle: b.ogTitle, ogDescription: b.ogDescription, featuredImageId: b.featuredImageId ?? "", ogImageId: b.ogImageId ?? "", authorId: b.authorId ?? "" });
+        robots: b.robots, ogTitle: b.ogTitle, ogDescription: b.ogDescription, featuredImageId: b.featuredImageId ?? "", ogImageId: b.ogImageId ?? "", authorId: b.authorId ?? "", authorName: b.authorName ?? "" });
     } catch (e) { toast((e as Error).message, true); }
   })(); }, [id]); // eslint-disable-line
   useEffect(() => { if (f.websiteId) api<Cat[]>(`/api/v1/admin/categories?website=${f.websiteId}`).then(setCats).catch(() => setCats([])); }, [f.websiteId]);
@@ -118,17 +118,21 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
             : <input className="chip-input" autoFocus aria-label="New category name" placeholder="Name, then Enter" value={newCat} onChange={(e) => setNewCat(e.target.value)} onBlur={addCat} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCat(); } if (e.key === "Escape") setNewCat(null); }} />}
         </div>
       </div>
+      <div className="qe-author"><label htmlFor="an">Author</label>
+        <input id="an" type="text" list="an-list" value={f.authorName} disabled={locked} maxLength={120}
+          placeholder={authors.find((a) => a.id === f.authorId)?.name ?? "Author name"} onChange={(e) => set({ authorName: e.target.value })} />
+        <datalist id="an-list">{authors.map((a) => <option key={a.id} value={a.name} />)}</datalist>
+        <small>Shown on the website as “By …”. Type any name, e.g. a guest writer.</small></div>
       {f.websiteId && <ImageDrop websiteId={f.websiteId} value={f.featuredImageId} disabled={locked} onChange={(v) => set({ featuredImageId: v })}
         hint="Optional — if empty, the first image in your text is used" />}
       <div className="field"><label>Article text</label>
-        {!locked ? <RichEditor value={f.content} websiteId={f.websiteId} onChange={(html) => set({ content: html })} /> : <div className="tt" dangerouslySetInnerHTML={{ __html: f.content }} />}
-        <small>Tip: paste straight from Word or Google Docs — headings, lists, links and images come along. Ctrl+S saves, Ctrl+Enter publishes.</small></div>
+        {!locked ? <RichEditor value={f.content} websiteId={f.websiteId} onChange={(html) => set({ content: html })} /> : <div className="tt" dangerouslySetInnerHTML={{ __html: f.content }} />}</div>
 
-      <button type="button" className="qe-more" aria-expanded={more} onClick={() => setMore(!more)}><ChevronDown size={16} style={{ transform: more ? "rotate(180deg)" : "none" }} /> More options <span className="mut">address, summary, author, tags, Google &amp; sharing, schedule, history</span></button>
+      <button type="button" className="qe-more" aria-expanded={more} onClick={() => setMore(!more)}><ChevronDown size={16} style={{ transform: more ? "rotate(180deg)" : "none" }} /> More options <span className="mut">address, summary, tags, Google &amp; sharing, schedule, history</span></button>
       {more && <div className="qe-more-body">
         <div className="grid2">
           <div className="field"><label htmlFor="s">Web address</label><input id="s" type="text" value={f.slug} disabled={locked} onChange={(e) => { setSlugEdited(true); set({ slug: slugify(e.target.value) }); }} /><small>…/article.html?slug={f.slug || "your-article"}</small></div>
-          <div className="field"><label htmlFor="au">Author</label><select id="au" value={f.authorId} disabled={locked} onChange={(e) => set({ authorId: e.target.value })}><option value="">No author shown</option>{authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+          <div className="field"><label htmlFor="ac">Written by (account)</label><select id="ac" value={f.authorId} disabled={locked} onChange={(e) => set({ authorId: e.target.value })}><option value="">Nobody</option>{authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select><small>Who owns this article in the CMS.</small></div>
         </div>
         <div className="field"><label htmlFor="x">Short summary</label><textarea id="x" rows={2} value={f.excerpt} disabled={locked} maxLength={500} placeholder="Leave empty to use the first lines of the article" onChange={(e) => set({ excerpt: e.target.value })} /><small>Shown on the blog card.</small></div>
         <div className="field"><label htmlFor="tg">Tags</label><input id="tg" type="text" value={tagText} disabled={locked} placeholder="Type a tag, press Enter" onChange={(e) => setTagText(e.target.value)}
@@ -149,7 +153,7 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
     {showPv && site?.domain && <BlogPreview base={site.domain.replace(/\/$/, "")} onClose={() => setShowPv(false)} article={{
       title: f.title, slug: f.slug, excerpt: f.excerpt, content: f.content, publishedAt: meta?.publishedAt || new Date().toISOString(),
       category: (() => { const c = cats.find((x) => x.id === f.categoryId); return c ? { name: c.name, slug: c.slug } : null; })(),
-      author: authors.find((a) => a.id === f.authorId)?.name ?? null,
+      author: f.authorName.trim() || (authors.find((a) => a.id === f.authorId)?.name ?? null),
       featuredImage: f.featuredImageId ? { url: window.location.origin + `/api/v1/media/${f.featuredImageId}`, alt: f.title } : null,
       seo: { title: f.seoTitle || f.title, description: f.metaDescription || f.excerpt } }} />}
     {el}

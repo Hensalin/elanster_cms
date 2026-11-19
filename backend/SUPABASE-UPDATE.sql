@@ -38,3 +38,6 @@ ALTER TABLE pages ADD COLUMN IF NOT EXISTS review_by text REFERENCES users(id) O
 ALTER TABLE pages ADD COLUMN IF NOT EXISTS review_at timestamptz;
 CREATE INDEX IF NOT EXISTS pages_review ON pages (website_id, review_state);
 ALTER TABLE pages ADD COLUMN IF NOT EXISTS edited_by text REFERENCES users(id) ON DELETE SET NULL;
+
+-- Author name shown on the website (free text, e.g. a guest writer)
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS author_name text NOT NULL DEFAULT '';

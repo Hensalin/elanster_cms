@@ -714,3 +714,46 @@ textarea[readonly], input[readonly] { background: var(--soft, #f6f4f2); color: v
 .pe details[open] > summary::before { transform: rotate(45deg); }
 .seg-sm { display: flex; width: 100%; } .seg-sm button { flex: 1; font-size: 12.5px; padding: 6px 8px; }
 .seg-sm small { opacity: .6; margin-left: 4px; font-weight: 500; }
+
+/* Week card v2: pick a day, see that day's updates */
+.wk-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wk-nav { display: flex; align-items: center; gap: 2px; background: var(--card); border-radius: 99px; padding: 3px; box-shadow: var(--float); }
+.wk-nav button { border: 0; background: transparent; height: 26px; min-width: 26px; padding: 0 8px; border-radius: 99px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+.wk-nav button:hover { color: var(--ink, #18181b); background: var(--soft); }
+.wk-nav .wk-today { font-size: 12px; font-weight: 600; } .wk-nav .wk-today.on { color: #f26f2c; }
+.week-strip { gap: 6px; margin: 4px 0 14px; }
+.week .wd { border: 0; background: transparent; font: inherit; cursor: pointer; padding: 8px 0 6px; border-radius: 14px; gap: 2px; color: inherit; }
+.week .wd:hover { background: var(--card); }
+.week .wd small { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.week .wd b { width: auto; height: auto; background: none !important; color: inherit; font-size: 15px; font-weight: 700; border-radius: 0; }
+.week .wd.today b { color: #f26f2c; }
+.week .wd.sel { background: #18181b; color: #fff; box-shadow: 0 6px 16px rgba(24,24,27,.18); }
+.week .wd.sel small { color: rgba(255,255,255,.65); } .week .wd.sel.today b { color: #f8a476; }
+.wd-dots { display: flex; gap: 3px; height: 5px; }
+.week .wd .wd-dots i { position: static; width: 5px; height: 5px; border-radius: 50%; background: #f26f2c; }
+.week .wd:not(.busy) .wd-dots { visibility: hidden; }
+.wk-day { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; font-size: 13px; }
+.wk-day b { font-size: 14px; } .wk-day span { color: var(--muted); } .wk-day em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--muted); }
+.wk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wk-list li { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: center; }
+.wk-list .wk-time { padding: 0; font-size: 11.5px; font-weight: 600; text-align: right; color: var(--muted); }
+.wk-list .wk-box { padding: 9px 12px 9px 16px; }
+.wk-list .wk-box small { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-kind { font-weight: 600; } .wk-kind.pub { color: #1f9d55; } .wk-kind.rev { color: #b7611f; }
+.wk-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 18px 8px; border: 1.5px dashed color-mix(in srgb, var(--dark) 14%, transparent); border-radius: 14px; }
+
+/* Dashboard v3 layout: work on top, websites + activity below, the week on the right at full height */
+.dash .week.tall { grid-row: span 2; }
+.site-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; }
+.site-list li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; background: var(--card); border-radius: 16px; padding: 9px 12px; box-shadow: var(--float); }
+.site-list b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-list small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-list .site-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; background: var(--soft); color: var(--muted); }
+.site-list .site-ic.on { background: #fde4d6; color: #b7611f; }
+.conn { font-size: 11.5px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.conn::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.conn.ok { color: #1f9d55; } .conn.no { color: var(--muted); }
+@media (max-width: 1180px) { .dash .week.tall { grid-row: auto; } }
+.qe-author { display: grid; grid-template-columns: 70px minmax(0, 340px); justify-content: start; align-items: center; gap: 4px 12px; margin: 10px 0 14px; }
+.qe-author input { width: 100%; }
+.qe-author label { font-weight: 600; font-size: 13.5px; } .qe-author small { grid-column: 2; color: var(--muted); font-size: 12px; }

@@ -179,42 +179,58 @@
     });
   });
 
-  /* Article lists (blog page, "keep reading"): articles published in the CMS that the page does not show yet
-     are added as copies of the first card in the list, newest first. */
-  var cardSlug = function (a) { var m = /(?:^|\/)([^/?#]+?)\.html?(?:[?#]|$)/.exec(a.getAttribute("href") || ""); var q = /[?&]article=([^&#]+)/.exec(a.getAttribute("href") || "");
-    return q ? decodeURIComponent(q[1]) : m && /\//.test(a.getAttribute("href")) ? m[1] : null; };
+  /* Article lists (blog page, "latest", "keep reading"): they always follow the CMS, newest first.
+     Cards of existing articles get the title, summary and picture published in the CMS; new articles get a copy of a
+     card; a single "latest" card shows the newest article; a short list keeps its length. */
+  var cardSlug = function (a) { var h = a.getAttribute("href") || "", q = /[?&]article=([^&#]+)/.exec(h), m = /(?:^|\/)([^/?#]+?)\.html?(?:[?#]|$)/.exec(h);
+    return q ? decodeURIComponent(q[1]) : m && /\//.test(h) ? m[1] : null; };
+  function fillCard(c, x, isNew) {
+    var hd = c.querySelector("h1,h2,h3,h4"); if (hd && x.title) hd.textContent = x.title;
+    var p = c.querySelector("p"); if (p && x.excerpt) p.textContent = x.excerpt;
+    var im = c.querySelector("img"); if (im && x.featuredImage && x.featuredImage.url) { setImage(im, x.featuredImage.url); im.alt = x.featuredImage.alt || x.title; }
+    else if (im && isNew) im.style.visibility = "hidden";
+    // Cards are moved around, so a "fade in on scroll" effect could leave them hidden: show them plainly.
+    c.removeAttribute("data-reveal"); c.style.opacity = "1"; c.style.transform = "none";
+    c.querySelectorAll("[data-reveal]").forEach(function (n) { n.removeAttribute("data-reveal"); n.style.opacity = "1"; n.style.transform = "none"; });
+    if (!isNew) return;
+    Array.prototype.forEach.call(c.querySelectorAll("span,small,time"), function (n) {
+      if (n.children.length && !n.querySelector("i,svg")) return;
+      var t = (n.textContent || "").trim();
+      if (/\b(19|20)\d\d\b/.test(t)) n.textContent = fmtDate(x.publishedAt);
+      else if (/^By\s/i.test(t)) { var icon = n.querySelector("i,svg"); n.textContent = x.author ? "By " + x.author + " " : ""; if (icon && x.author) n.appendChild(icon); }
+    });
+  }
   ready(function () {
     var cards = Array.prototype.filter.call(document.querySelectorAll("a[href]"), function (a) { return cardSlug(a) && a.querySelector("h1,h2,h3,h4") && !a.closest("header,nav,footer"); });
     if (!cards.length) return;
     api("/blogs?limit=50").then(function (d) {
-      if (!d || !d.items) return;
-      var onPage = {}; cards.forEach(function (c) { onPage[cardSlug(c)] = true; });
-      var known = d.items.filter(function (x) { return onPage[x.slug]; }).length;
-      if (!known) return;   // these cards are not this website's articles
-      var missing = d.items.filter(function (x) { return !onPage[x.slug]; });
-      var lists = []; cards.forEach(function (c) { var p = c.parentElement; if (lists.indexOf(p) < 0 && p.querySelectorAll(":scope > a[href]").length >= 2) lists.push(p); });
-      lists.forEach(function (list) {
-        var own = Array.prototype.filter.call(list.children, function (c) { return cards.indexOf(c) >= 0; });
-        var full = own.length >= known - 1;   // the full article list; otherwise a short "keep reading" list keeps its size
-        var add = full ? missing : missing.slice(0, own.length);
-        add.slice().reverse().forEach(function (x) {
-          var tpl = own[0], c = tpl.cloneNode(true), href = tpl.getAttribute("href").replace(/[?#].*$/, "");
-          c.setAttribute("href", href + "?article=" + encodeURIComponent(x.slug));
-          c.removeAttribute("data-reveal"); c.style.opacity = "1"; c.style.transform = "none";
-          c.querySelectorAll("[data-reveal]").forEach(function (n) { n.removeAttribute("data-reveal"); n.style.opacity = "1"; n.style.transform = "none"; });
-          var hd = c.querySelector("h1,h2,h3,h4"); if (hd) hd.textContent = x.title;
-          var p = c.querySelector("p"); if (p) p.textContent = x.excerpt || "";
-          var im = c.querySelector("img"); if (im) { if (x.featuredImage && x.featuredImage.url) { setImage(im, x.featuredImage.url); im.alt = x.featuredImage.alt || x.title; } else im.style.visibility = "hidden"; }
-          Array.prototype.forEach.call(c.querySelectorAll("span,small,time"), function (n) {
-            if (n.children.length && !n.querySelector("i,svg")) return;
-            var t = (n.textContent || "").trim();
-            if (/\b(19|20)\d\d\b/.test(t)) n.textContent = fmtDate(x.publishedAt);
-            else if (/^By\s/i.test(t)) { var icon = n.querySelector("i,svg"); n.textContent = x.author ? "By " + x.author + " " : ""; if (icon && x.author) n.appendChild(icon); }
-          });
-          list.insertBefore(c, list.firstElementChild);
-          if (!full && list.lastElementChild !== c) list.removeChild(own.pop());
+      if (!d || !d.items || !d.items.length) return;
+      var bySlug = {}; d.items.forEach(function (x) { bySlug[x.slug] = x; });
+      var page = {}; cards.forEach(function (c) { var sl = cardSlug(c); if (!page[sl]) page[sl] = c.getAttribute("href").replace(/[?#].*$/, ""); });
+      if (!Object.keys(page).some(function (sl) { return bySlug[sl]; })) return;   // these cards are not this website's articles
+      var here = wanted ? decodeURIComponent(wanted) : (location.pathname.split("/").pop() || "").replace(/\.html?$/, "");
+      var tplHref = cards[0].getAttribute("href").replace(/[?#].*$/, "");
+      var hrefFor = function (x) { return page[x.slug] && !/[?]article=/.test(page[x.slug]) && /\.html?$/.test(page[x.slug]) && cardSlug({ getAttribute: function () { return page[x.slug]; } }) === x.slug
+        ? page[x.slug] : tplHref + "?article=" + encodeURIComponent(x.slug); };
+      var queue = d.items.filter(function (x) { return x.slug !== here; });   // newest first, never the article being read
+      var groups = []; cards.forEach(function (c) { if (groups.indexOf(c.parentElement) < 0) groups.push(c.parentElement); });
+      var used = {};
+      groups.forEach(function (g) {
+        var own = Array.prototype.filter.call(g.children, function (c) { return cards.indexOf(c) >= 0; });
+        var full = own.length >= Object.keys(page).length - 2;   // the complete list on the blog page
+        var want = full ? queue.filter(function (x) { return !used[x.slug]; }) : queue.filter(function (x) { return !used[x.slug]; }).slice(0, own.length);
+        var pool = {}; own.forEach(function (c) { pool[cardSlug(c)] = c; });
+        var anchor = own[own.length - 1].nextSibling, tpl = own[0];
+        own.forEach(function (c) { c.remove(); });
+        want.forEach(function (x) {
+          used[x.slug] = true;
+          var c = pool[x.slug], isNew = !c;
+          if (!c) { c = tpl.cloneNode(true); c.setAttribute("href", hrefFor(x)); }
+          fillCard(c, x, isNew);
+          g.insertBefore(c, anchor);
         });
       });
+      try { if (window.ScrollTrigger) window.ScrollTrigger.refresh(); } catch (e) { /* ignore */ }
     });
   });
 })();

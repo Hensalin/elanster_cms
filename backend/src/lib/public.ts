@@ -39,7 +39,7 @@ export function publicBlog(b: BlogFull, origin: string, withContent: boolean) {
     // Pictures inside the text always point at this CMS's public address (never "localhost" or the website's own address).
     ...(withContent ? { content: b.content.replace(/(\ssrc=["'])(?:https?:\/\/[^"'\s]*?)?\/api\/v1\/media\//gi, `$1${origin}/api/v1/media/`) } : {}),
     publishedAt: b.publishedAt, updatedAt: b.updatedAt,
-    author: b.author?.name ?? null,
+    author: b.authorName || b.author?.name || null,
     category: b.category ? { name: b.category.name, slug: b.category.slug } : null,
     tags: b.tagLinks.map((l) => ({ name: l.tag.name, slug: l.tag.slug })),
     featuredImage: img(b.featuredImage),
