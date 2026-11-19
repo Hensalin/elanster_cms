@@ -59,7 +59,9 @@ export const GET = admin<{ params: Promise<{ id: string }> }>(async (_req, { par
     hint: keyOk ? undefined : me.status === 401 ? "The key is wrong, revoked, or its website is turned off. Create a new key under API keys." :
       owner?.slug ? `This key belongs to another website (“${owner.slug}”). Create a key for this website instead.` : `The CMS address in the file (${url || "empty"}) did not answer.` });
 
-  checks.push({ ok: home.text.includes("data-cms="), label: "Pages are prepared for CMS text", hint: "Optional: needed only for editing page text. Push the tagged page files to the website." });
+  const pgs = await db.select({ content: schema.pages.content }).from(schema.pages).where(eq(schema.pages.websiteId, id));
+  const texts = pgs.reduce((n, p) => { try { return n + ((JSON.parse(p.content).fields ?? []) as { tag: string }[]).filter((f) => !f.tag.startsWith("seo")).length; } catch { return n; } }, 0);
+  checks.push({ ok: texts > 0, label: texts ? `${texts} texts found on the website pages` : "Texts found on the website pages", hint: "Optional: click Sync pages on the Content page so the CMS reads the texts of every page." });
   const pub = await db.select({ id: schema.pages.id }).from(schema.pages).where(and(eq(schema.pages.websiteId, id), eq(schema.pages.status, "PUBLISHED")));
   checks.push({ ok: pub.length > 0, label: `${pub.length} page${pub.length === 1 ? "" : "s"} published`, hint: "Optional: publish a page to show CMS text on it." });
   return done();

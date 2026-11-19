@@ -5,7 +5,12 @@
 (function () {
   "use strict";
   var cfg = window.ELANSTER_CMS || {};
-  var slug = (document.body && document.body.getAttribute("data-cms-page")) || "";
+  var pathSlug = function () {
+    var f = location.pathname.replace(/^\/+/, "").replace(/\/$/, "").replace(/\.html?$/, "").replace(/\/index$/, "");
+    return !f || f === "index" ? "home" : f.replace(/\//g, "-");
+  };
+  var slug = (document.body && document.body.getAttribute("data-cms-page")) || pathSlug();
+  var TAGS = "h1,h2,h3,h4,h5,h6,p,li,a,button,figcaption,blockquote,dt,dd,label";
   var norm = function (s) { return String(s).replace(/\s+/g, " ").trim(); };
   var ready = function (fn) { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn); else fn(); };
 
@@ -21,6 +26,25 @@
     var lead = /^\s*/.exec(main.nodeValue)[0], trail = /\s*$/.exec(main.nodeValue)[0]; main.nodeValue = lead + text + trail;
   }
   function metaSet(sel, v) { var m = document.querySelector(sel); if (m) m.setAttribute("content", v); }
+  /* Websites without data-cms markers: find each text by its original wording and mark it, so it can be changed. */
+  function tag(original) {
+    if (!original || !document.body) return;
+    var want = {};
+    Object.keys(original).forEach(function (k) {
+      if (/\.seo\./.test(k) || document.querySelector('[data-cms="' + k.replace(/"/g, "") + '"]')) return;
+      var t = norm(original[k]); if (t) (want[t] = want[t] || []).push(k);
+    });
+    if (!Object.keys(want).length) return;
+    document.querySelectorAll(TAGS).forEach(function (el) {
+      if (el.hasAttribute("data-cms") || el.closest("script,style,svg")) return;
+      var keys = want[norm(el.textContent)]; if (!keys) return;
+      var tagName = el.tagName.toLowerCase();
+      var key = keys.filter(function (k) { return k.split(".")[1] === tagName; })[0] || keys[0];
+      // Use the innermost element holding exactly this text.
+      var inner = Array.prototype.some.call(el.querySelectorAll(TAGS), function (c) { return norm(c.textContent) === norm(el.textContent); });
+      if (!inner) el.setAttribute("data-cms", key);
+    });
+  }
   function apply(values) {
     Object.keys(values).forEach(function (key) {
       var v = values[key];
@@ -43,14 +67,15 @@
     }, true);
     window.addEventListener("message", function (e) {
       var d = e.data; if (!d || d.source !== "elanster-cms") return;
-      if (d.type === "values") apply(d.values);
+      if (d.type === "values") { tag(d.original); apply(d.values); }
       if (d.type === "focus") {
         document.querySelectorAll(".cms-active").forEach(function (x) { x.classList.remove("cms-active"); });
         var el = document.querySelector('[data-cms="' + String(d.key).replace(/"/g, "") + '"]');
         if (el) { el.classList.add("cms-active"); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
       }
     });
-    window.addEventListener("load", function () { setTimeout(function () { post({ type: "ready", slug: slug }); }, 500); });
+    var hello = function () { setTimeout(function () { post({ type: "ready", slug: slug }); }, 500); };
+    if (document.readyState === "complete") hello(); else window.addEventListener("load", hello);
     return;
   }
 
@@ -62,16 +87,27 @@
   };
   {
     var cacheKey = "cms:" + cfg.site + ":" + (slug || "_global");   // menu & footer texts apply on every page, articles included
-    try { var c = JSON.parse(localStorage.getItem(cacheKey) || "null"); if (c) ready(function () { apply(c); }); } catch (e) { /* private mode */ }
+    // Applied again after the page's own scripts finish, for menus or sections they build or copy.
+    var show = function (c) { var go = function () { tag(c.original); apply(c.fields); };
+      ready(go); window.addEventListener("load", function () { setTimeout(go, 800); }); setTimeout(go, 2500); };
+    try { var c = JSON.parse(localStorage.getItem(cacheKey) || "null"); if (c && c.fields) show(c); } catch (e) { /* private mode */ }
     Promise.all([slug ? api("/pages/" + slug) : Promise.resolve(null), api("/pages/_global")]).then(function (r) {
-      var all = {}; r.forEach(function (p) { if (p && p.fields) Object.keys(p.fields).forEach(function (k) { all[k] = p.fields[k]; }); });
+      var all = { fields: {}, original: {} };
+      r.forEach(function (p) { if (!p) return;
+        if (p.fields) Object.keys(p.fields).forEach(function (k) { all.fields[k] = p.fields[k]; });
+        if (p.original) Object.keys(p.original).forEach(function (k) { if (k in all.fields) all.original[k] = p.original[k]; }); });
       try { localStorage.setItem(cacheKey, JSON.stringify(all)); } catch (e) { /* ignore */ }
-      ready(function () { apply(all); });
+      show(all);
     });
   }
   // Article pages: show the article as published in the CMS (title, text, picture).
   ready(function () {
-    var body = document.querySelector("[data-cms-article]"); if (!body) return;
+    var body = document.querySelector("[data-cms-article]");
+    if (!body && /\/[^/]+\/[^/]+$/.test(location.pathname)) {   // an <article> on a page inside a folder, e.g. /blogs/my-post.html
+      body = document.querySelector("article");
+      if (body) { var h = body.querySelector("h1") || document.querySelector("h1"); if (h) h.setAttribute("data-cms-title", ""); }
+    }
+    if (!body) return;
     var aslug = body.getAttribute("data-cms-article") || (location.pathname.split("/").pop() || "").replace(/\.html?$/, "");
     api("/blogs/" + encodeURIComponent(aslug)).then(function (a) {
       if (!a || !a.content) return;

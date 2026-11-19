@@ -53,7 +53,7 @@ function AddSite({ onClose, onDone }: { onClose: () => void; onDone: (r: any) =>
 }
 
 const cmsPublicUrl = () => process.env.NEXT_PUBLIC_CMS_API_URL || "https://elanster-cms-five.vercel.app"; // always the live CMS address, a website cannot reach localhost
-const sharedSnippet = (key: string) => `(function(){var s=document.createElement("script");s.src="${cmsPublicUrl()}/cms.js";s.setAttribute("data-key","${key}");document.head.appendChild(s);})();`;
+const sharedSnippet = (key: string) => `<script src="${cmsPublicUrl()}/cms.js" data-key="${key}" defer></script>`;
 function Keys({ site, onClose, toast }: { site: any; onClose: () => void; toast: (m: string, e?: boolean) => void }) {
   const [keys, setKeys] = useState<any[]>([]); const [fresh, setFresh] = useState(""); const [label, setLabel] = useState("Website");
   const load = useCallback(() => api(`/api/v1/admin/websites/${site.id}/api-keys`).then(setKeys), [site.id]);
@@ -61,8 +61,8 @@ function Keys({ site, onClose, toast }: { site: any; onClose: () => void; toast:
   return (<div className="modal" onClick={onClose}><div onClick={(e) => e.stopPropagation()}>
     <h2>API keys — {site.name}</h2>
     <p style={{ color: "var(--muted)" }}>This key lets <b>{site.name}</b> read its own published content. It cannot read other websites or any drafts.</p>
-    {fresh && <div style={{ marginBottom: 14 }}><p><b>Your script for all pages. Copy it now, it will not be shown again.</b></p>
-      <p style={{ color: "var(--muted)" }}>Paste it once at the very top of the JavaScript file that every page of {site.name} already loads. It then works on all those pages.</p>
+    {fresh && <div style={{ marginBottom: 14 }}><p><b>Your website script. Copy it now, it will not be shown again.</b></p>
+      <p style={{ color: "var(--muted)" }}>Paste this line inside the <code>&lt;head&gt;</code> of your pages (just before <code>&lt;/head&gt;</code>), then push. It runs on every page where it is pasted.</p>
       <div className="keybox" style={{ wordBreak: "break-all" }}>{sharedSnippet(fresh)}</div>
       <button className="btn sm dark" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(sharedSnippet(fresh)); toast("Script copied"); }}>Copy script</button></div>}
     <div style={{ display: "flex", gap: 8, marginBottom: 14 }}><input type="text" value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Key label" />
