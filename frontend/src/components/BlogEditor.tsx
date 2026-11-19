@@ -57,14 +57,14 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
     setBusy(true);
     try {
       const body = { ...f, categoryId: f.categoryId || null, featuredImageId: f.featuredImageId || null, ogImageId: f.ogImageId || null, authorId: f.authorId || null };
-      const b = isNew ? await api("/api/v1/admin/blogs", { method: "POST", body }) : await api(`/api/v1/admin/blogs/${curId}`, { method: "PUT", body });
+      const b = isNew ? await api("/api/v1/admin/blogs", { method: "POST", body }) : await api(`/api/v1/admin/blogs/${curId}`, { method: "PUT", body: { ...body, expectedUpdatedAt: meta?.updatedAt } });
       setMeta((m: any) => ({ ...b, canPublish: m?.canPublish ?? b.canPublish })); setDirty(false); setSavedAt(new Date()); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (!suggest) setF((x) => ({ ...x, slug: b.slug, excerpt: x.excerpt || b.excerpt, featuredImageId: x.featuredImageId || b.featuredImageId || "" }));
       if (!quiet) toast(suggest ? "Changes saved. The live article is not changed until an admin approves." : status === "PUBLISHED" ? "Live article updated" : "Draft saved");
       if (isNew) { setCurId(b.id); onCreated?.(b.id); } onChanged?.();
       return b;
     } catch (e) { toast((e as Error).message, true); return null; } finally { setBusy(false); }
-  }, [f, curId, isNew, status, suggest]); // eslint-disable-line
+  }, [f, curId, isNew, status, suggest, meta]); // eslint-disable-line
 
   async function act(action: string, ok: string, extra: object = {}) {
     const b = dirty || isNew ? await save(true) : meta; if (!b) return; setBusy(true);

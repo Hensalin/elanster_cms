@@ -17,7 +17,9 @@ export async function websiteFromKey(req: Request) {
     .where(and(eq(schema.apiKeys.keyHash, hashKey(raw)), eq(schema.apiKeys.active, true),
       eq(schema.websites.active, true), isNull(schema.websites.deletedAt)));
   if (!row) return null;
-  // Awaited: on Vercel an unfinished update can be dropped after the response, so "last used" would never change.
-  await db.update(schema.apiKeys).set({ lastUsedAt: new Date() }).where(eq(schema.apiKeys.id, row.key.id)).catch(() => {});
+  // "Last used" is written at most every 5 minutes, so busy websites do not cause a database write on every visit.
+  // (Awaited: on Vercel an unfinished update can be dropped after the response.)
+  if (!row.key.lastUsedAt || Date.now() - row.key.lastUsedAt.getTime() > 5 * 60_000)
+    await db.update(schema.apiKeys).set({ lastUsedAt: new Date() }).where(eq(schema.apiKeys.id, row.key.id)).catch(() => {});
   return row.site;
 }

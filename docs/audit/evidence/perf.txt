@@ -1,0 +1,4 @@
+CMS login (production build)   {"ttfb":26,"load":126,"lcp":92,"cls":"0.000","js":144,"requests":12}
+CMS dashboard (production)     {"ttfb":9,"load":39,"lcp":92,"cls":"0.000","js":311,"requests":33}
+Website home (test copy)       {"ttfb":3,"load":996,"lcp":588,"cls":"0.001","js":100,"requests":45}
+Website blog (test copy)       {"ttfb":3,"load":762,"lcp":420,"cls":"0.000","js":100,"requests":45}

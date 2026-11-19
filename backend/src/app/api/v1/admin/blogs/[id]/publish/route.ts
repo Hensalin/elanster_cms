@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { canPublish, websiteRole } from "@/lib/auth";
 import { blogColumns, blogInput, blogWithRelations, checkBlogRefs, setBlogTags, uniqueBlogSlug } from "@/lib/blogs";
+import { gitAfter } from "@/lib/gitpublish";
 import { saveVersion } from "@/lib/ratelimit";
 import { admin, fail, json } from "@/lib/http";
 
@@ -13,6 +14,8 @@ const body = z.object({
   scheduledAt: z.string().datetime().optional(),
 });
 
+// Git publishing runs after the answer is sent; give it time to finish on Vercel.
+export const maxDuration = 60;
 export const POST = admin<{ params: Promise<{ id: string }> }>(async (req, { params }, user) => {
   const { id } = await params;
   const d = body.parse(await req.json());
@@ -55,6 +58,7 @@ export const POST = admin<{ params: Promise<{ id: string }> }>(async (req, { par
         await log("APPROVE_CHANGES", "approved and published changes on");
       }
     }
+    if (d.action === "approve_changes") gitAfter(b.websiteId, `approve changes to article ${b.slug}`);
     return json(await blogWithRelations(id));
   }
   // Backend rule: only Super Admin / Website Admin can make content live.
@@ -79,5 +83,6 @@ export const POST = admin<{ params: Promise<{ id: string }> }>(async (req, { par
   const [updated] = await db.update(schema.blogs).set(patch).where(eq(schema.blogs.id, id)).returning();
   await db.insert(schema.publishingHistory).values({ blogId: id, userId: user.id, action: label, note: d.note ?? "" });
   await db.insert(schema.activityLogs).values({ userId: user.id, websiteId: b.websiteId, action: "BLOG_" + label, entity: "blog", entityId: id, summary: `${label.toLowerCase().replace("_", " ")}: "${b.title}"` });
+  if (d.action === "publish" || d.action === "unpublish") gitAfter(b.websiteId, `${d.action} article ${b.slug}`);
   return json(updated);
 });

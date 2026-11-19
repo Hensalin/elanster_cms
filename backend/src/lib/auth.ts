@@ -19,7 +19,7 @@ export type SessionUser = {
 };
 
 export async function createSession(userId: string) {
-  const token = await new SignJWT({ sub: userId })
+  const token = await new SignJWT({ sub: userId, t: Date.now() })   // t: when it was issued, in milliseconds
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("8h")
@@ -39,7 +39,11 @@ export async function getUser(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, secret());
     const [u] = await db.select().from(schema.users)
       .where(and(eq(schema.users.id, String(payload.sub)), eq(schema.users.active, true), isNull(schema.users.deletedAt)));
-    return u ? { id: u.id, email: u.email, name: u.name, role: u.role } : null;
+    if (!u) return null;
+    // A sign-in from before a password change or reset is no longer valid.
+    const issued = typeof payload.t === "number" ? payload.t : (payload.iat ?? 0) * 1000;
+    if (u.sessionsValidAfter && issued < u.sessionsValidAfter.getTime()) return null;
+    return { id: u.id, email: u.email, name: u.name, role: u.role };
   } catch { return null; }
 }
 

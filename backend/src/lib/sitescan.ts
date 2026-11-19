@@ -4,13 +4,13 @@ import { db, schema } from "@/db";
 import { manifestSchema, readContent, writeContent, type PageField } from "./pagecontent";
 import { cleanHtml } from "./sanitize";
 import { findImages, findTexts, kindOf, textHash } from "./pagetexts";
+import { safeFetch, sniffImage } from "./netguard";
 
 type Manifest = z.infer<typeof manifestSchema>;
 type ScanPage = Manifest["pages"][number];
 
 const get = async (url: string) => {
-  try { const r = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(9000), headers: { "User-Agent": "ElansterCMS-PageSync/1.0" } });
-    return r.ok ? await r.text() : null; } catch { return null; }
+  try { const r = await safeFetch(url, { maxBytes: 4_000_000, headers: { "User-Agent": "ElansterCMS-PageSync/1.0" } }); return r.ok ? r.text() : null; } catch { return null; }
 };
 const ENT: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", mdash: "—", ndash: "–", middot: "·", hellip: "…", copy: "©", reg: "®", trade: "™", bull: "•", rarr: "→", larr: "←", times: "×", deg: "°", eacute: "é", laquo: "«", raquo: "»" };
 const decode = (s: string) => s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : +e.slice(1)) : ENT[e.toLowerCase()] ?? m);
@@ -147,13 +147,10 @@ export async function importPosts(websiteId: string, base: string, htmls: string
     let featuredImageId: string | null = null;
     if (p.image && !ex?.featuredImageId) {
       try {
-        const r = await fetch(new URL(p.image, base + "/").toString(), { signal: AbortSignal.timeout(12000) });
-        const type = r.headers.get("content-type") ?? "";
-        if (r.ok && type.startsWith("image/")) {
-          const buf = Buffer.from(await r.arrayBuffer());
-          if (buf.length < 8_000_000) featuredImageId = (await db.insert(schema.media).values({ websiteId, filename: p.slug.slice(0, 60) + ".jpg", originalName: p.slug.slice(0, 60) + ".jpg",
-            mimeType: type.split(";")[0], size: buf.length, altText: p.alt ?? p.title, folder: "blog", data: buf }).returning())[0].id;
-        }
+        const r = await safeFetch(new URL(p.image, base + "/"), { maxBytes: 8_000_000, timeoutMs: 12000 });
+        const type = r.ok ? sniffImage(r.buf) : null;   // only real raster pictures (never SVG or HTML pretending to be an image)
+        if (type) featuredImageId = (await db.insert(schema.media).values({ websiteId, filename: p.slug.slice(0, 60) + ".jpg", originalName: p.slug.slice(0, 60) + ".jpg",
+            mimeType: type, size: r.buf.length, altText: p.alt ?? p.title, folder: "blog", data: r.buf }).returning())[0].id;
       } catch (e) { problems.push(`photo for “${p.title.slice(0, 40)}”: ${(e as Error).message}`); }
     }
     if (ex) {

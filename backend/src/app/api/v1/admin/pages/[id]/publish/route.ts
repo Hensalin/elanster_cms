@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { canEdit, canPublish, websiteRole } from "@/lib/auth";
 import { admin, fail, json } from "@/lib/http";
+import { gitAfter } from "@/lib/gitpublish";
 import { hasUnpublished, readContent, writeContent } from "@/lib/pagecontent";
 
 const body = z.object({
@@ -12,6 +13,8 @@ const body = z.object({
 const LABEL: Record<string, string> = { publish: "published", unpublish: "unpublished", discard: "discarded the changes on", submit: "sent for review", request_changes: "asked for changes on", withdraw: "took back from review" };
 
 /** Page workflow. Editor: submit (send for review) or withdraw. Website Admin / Super Admin: publish, request changes, discard, unpublish. */
+// Git publishing runs after the answer is sent; give it time to finish on Vercel.
+export const maxDuration = 60;
 export const POST = admin<{ params: Promise<{ id: string }> }>(async (req, { params }, user) => {
   const { id } = await params;
   const d = body.parse(await req.json());
@@ -46,5 +49,6 @@ export const POST = admin<{ params: Promise<{ id: string }> }>(async (req, { par
   const [site] = await db.select({ name: schema.websites.name }).from(schema.websites).where(eq(schema.websites.id, p.websiteId));
   await db.insert(schema.activityLogs).values({ userId: user.id, websiteId: p.websiteId, action: "PAGE_" + d.action.toUpperCase(), entity: "page", entityId: id,
     summary: `${LABEL[d.action]} page "${p.title}" (${site?.name ?? ""})${d.note ? `: ${d.note.trim().slice(0, 140)}` : ""}` });
+  if (d.action === "publish" || d.action === "unpublish") gitAfter(p.websiteId, `${d.action} page ${p.slug}`);
   return json({ ok: true });
 });

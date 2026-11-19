@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, CircleAlert, KeyRound, Link2, Plus, Power, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, GitBranch, KeyRound, Link2, Plus, Power, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { api, fmt, useToast } from "@/components/ui";
 
 export default function Websites() {
   const [sites, setSites] = useState<any[] | null>(null); const [me, setMe] = useState<any>(null);
-  const [add, setAdd] = useState(false); const [keysFor, setKeysFor] = useState<any>(null); const [checkFor, setCheckFor] = useState<any>(null);
+  const [add, setAdd] = useState(false); const [keysFor, setKeysFor] = useState<any>(null); const [checkFor, setCheckFor] = useState<any>(null); const [gitFor, setGitFor] = useState<any>(null);
   const { toast, el } = useToast();
   const load = useCallback(() => api("/api/v1/admin/websites").then(setSites).catch((e) => toast(e.message, true)), []); // eslint-disable-line
   useEffect(() => { load(); api("/api/v1/auth/me").then(setMe); }, [load]);
@@ -28,12 +28,14 @@ export default function Websites() {
             <button className="icon-btn" title="Set website address" aria-label={`Set address for ${s.name}`} onClick={setAddress}><Link2 size={15} /></button>
             <button className="icon-btn" title="API keys" aria-label={`API keys for ${s.name}`} onClick={() => setKeysFor(s)}><KeyRound size={15} /></button>
             <button className="icon-btn" title="Check connection" aria-label={`Check connection for ${s.name}`} onClick={() => setCheckFor(s)}><RefreshCw size={15} /></button>
+            <button className="icon-btn" title={s.gitRepo ? `Git publishing: ${s.gitStatus === "FAILED" ? "needs attention" : s.gitStatus === "WARN" ? "warning" : "on"}` : "Git publishing"} aria-label={`Git publishing for ${s.name}`} onClick={() => setGitFor(s)} style={s.gitStatus === "FAILED" ? { color: "#b91c1c" } : s.gitRepo ? { color: "#15803d" } : undefined}><GitBranch size={15} /></button>
             <button className="icon-btn" title={s.active ? "Turn off" : "Turn on"} aria-label={(s.active ? "Turn off " : "Turn on ") + s.name} onClick={toggle}><Power size={15} /></button>
             <button className="icon-btn danger-ic" title="Remove website" aria-label={`Remove ${s.name}`} onClick={async () => { if (!confirm(`Remove “${s.name}” from the CMS? Its articles and pages are hidden with it.`)) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "DELETE" }); toast("Website removed"); load(); } catch (e) { toast((e as Error).message, true); } }}><Trash2 size={15} /></button>
           </div>}</td>
         </tr>); })}</tbody></table></div>}
     {add && <AddSite onClose={() => setAdd(false)} onDone={(r: any) => { setAdd(false); toast(r?.sync?.pages ? `Website added · ${r.sync.pages.length} pages brought in from ${r.domain.replace(/^https?:\/\//, "")}` : r?.sync?.error ? `Website added. Pages not read: ${r.sync.error}` : "Website added"); load(); }} />}
     {checkFor && <CheckPanel site={checkFor} onClose={() => { setCheckFor(null); load(); }} />}
+    {gitFor && <GitPanel site={gitFor} onClose={() => { setGitFor(null); load(); }} toast={toast} />}
     {keysFor && <Keys site={keysFor} onClose={() => setKeysFor(null)} toast={toast} />}
     {el}
   </>);
@@ -102,5 +104,35 @@ function CheckPanel({ site, onClose }: { site: any; onClose: () => void }) {
         <div><b>{c.label}</b>{!c.ok && c.hint && <small>{c.hint}</small>}
           {!c.ok && c.label === "Website is turned on in the CMS" && <button className="btn sm dark" style={{ marginTop: 8 }} onClick={async () => { try { await api(`/api/v1/admin/websites/${site.id}`, { method: "PUT", body: { active: true } }); run(); } catch (e) { setErr((e as Error).message); } }}><Power size={13} /> Turn on now</button>}</div></li>; })}</ol>}
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}><button className="btn" onClick={run} disabled={!checks}><RefreshCw size={14} /> Check again</button><button className="btn dark" onClick={onClose}>Done</button></div>
+  </div></div>);
+}
+
+function GitPanel({ site, onClose, toast }: { site: any; onClose: () => void; toast: (m: string, e?: boolean) => void }) {
+  const [g, setG] = useState<any>(null); const [repo, setRepo] = useState(site.gitRepo || ""); const [branch, setBranch] = useState(site.gitBranch || "main");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const load = useCallback(() => api(`/api/v1/admin/websites/${site.id}/git`).then((x) => { setG(x); }).catch((e) => setErr(e.message)), [site.id]);
+  useEffect(() => { load(); }, [load]);
+  const save = async () => { setBusy(true); setErr(""); try { await api(`/api/v1/admin/websites/${site.id}`, { method: "PUT", body: { gitRepo: repo.trim(), gitBranch: branch.trim() || "main" } }); toast(repo.trim() ? "Git publishing saved" : "Git publishing turned off"); load(); } catch (e) { setErr((e as Error).message); } setBusy(false); };
+  const publish = async (file?: string) => { setBusy(true); setErr(""); try { const r = await api(`/api/v1/admin/websites/${site.id}/git`, { method: "POST", body: file ? { action: "take_over", file } : { action: "publish" } }); setG((o: any) => ({ ...o, ...r })); toast(r.message, r.status === "FAILED"); } catch (e) { setErr((e as Error).message); } setBusy(false); };
+  const files = (g?.status === "WARN" ? String(g.message || "").split(" · ") : []).map((m) => /^(.+?\.html): changed in Git/.exec(m)?.[1]).filter(Boolean) as string[];
+  return (<div className="modal" onClick={onClose}><div onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Git publishing for ${site.name}`} style={{ background: "var(--card)", borderRadius: 20, padding: 24, width: "min(560px,100%)", maxHeight: "90vh", overflow: "auto" }}>
+    <h2>Git publishing — {site.name}</h2>
+    <p style={{ color: "var(--muted)" }}>When you press <b>Publish</b>, the CMS writes the changed texts, pictures and article pages into this website's real files on GitHub. Vercel then rebuilds the website. The website keeps working even if the CMS is down.</p>
+    {g && !g.tokenSet && <p className="err-text" role="alert"><b>The GitHub token is not set on the server.</b> Add <code>GITHUB_TOKEN</code> in Vercel → the <b>elanster-cms</b> project → Settings → Environment Variables, then redeploy.</p>}
+    <div className="field"><label htmlFor="gr">GitHub repository</label><input id="gr" type="text" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="Hensalin/elanster_website-demo" /></div>
+    <div className="field"><label htmlFor="gb">Branch</label><input id="gb" type="text" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></div>
+    <p style={{ color: "var(--muted)", fontSize: 13 }}>Leave the repository empty to turn Git publishing off. The CMS only ever writes the website's pages, its article pages (<code>article-….html</code>), uploaded pictures and a block in <code>sitemap.xml</code>. It never touches anything else.</p>
+    {g && g.enabled && <div className="tip" style={{ marginTop: 10 }}>
+      <b>Status: {g.status === "OK" ? "Up to date" : g.status === "WARN" ? "Needs a look" : g.status === "FAILED" ? "Failed" : g.status === "RUNNING" ? "Publishing…" : "Not published yet"}</b>
+      {g.message && <div style={{ marginTop: 4 }}>{g.message}</div>}
+      {g.commit && <div className="mut" style={{ marginTop: 4, fontSize: 12 }}>Last commit {String(g.commit).slice(0, 7)}{g.at ? " · " + fmt(g.at) : ""}</div>}
+    </div>}
+    {files.map((f) => <button key={f} className="btn sm" style={{ marginTop: 8 }} disabled={busy} onClick={() => { if (confirm(`Let the CMS write ${f} again? Changes made to this file directly in Git will be replaced.`)) publish(f); }}>Take over {f}</button>)}
+    {err && <p className="err-text" role="alert">{err}</p>}
+    <div style={{ display: "flex", flexWrap: "wrap", marginTop: 14, gap: 8, justifyContent: "flex-end" }}>
+      <button className="btn" onClick={onClose}>Close</button>
+      {g?.enabled && <button className="btn" disabled={busy} onClick={() => publish()}>{busy ? "Working…" : "Publish to Git now"}</button>}
+      <button className="btn dark" disabled={busy} onClick={save}>Save</button>
+    </div>
   </div></div>);
 }

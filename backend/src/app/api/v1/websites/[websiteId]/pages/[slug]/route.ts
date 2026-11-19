@@ -1,11 +1,11 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { readContent } from "@/lib/pagecontent";
-import { authorize, preflight, pub, pubError } from "@/lib/public";
+import { authorize, preflight, pub, pubError, safe } from "@/lib/public";
 
 export const OPTIONS = preflight;
 /** Published text for one page (only the pieces that were edited). The website swaps them into its own design. */
-export async function GET(req: Request, { params }: { params: Promise<{ websiteId: string; slug: string }> }) {
+export const GET = safe(async function GET(req: Request, { params }: { params: Promise<{ websiteId: string; slug: string }> }) {
   const { websiteId, slug } = await params;
   const a = await authorize(req, websiteId);
   if ("error" in a) return a.error;
@@ -19,4 +19,4 @@ export async function GET(req: Request, { params }: { params: Promise<{ websiteI
   const fields = Object.fromEntries(Object.entries(c.published).map(([k, v]) => [k, v.replace(/^(?:https?:\/\/[^/]+)?\/api\/v1\/media\//, `${origin}/api/v1/media/`)]));
   return pub({ slug: p.slug, title: p.title, publishedAt: p.publishedAt, fields,
     original: Object.fromEntries(c.fields.map((f) => [f.key, f.text])) });
-}
+});

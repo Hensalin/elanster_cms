@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { admin, fail, json } from "@/lib/http";
@@ -11,7 +11,12 @@ const body = z.object({
 export const PATCH = admin<{ params: Promise<{ id: string }> }>(async (req, c, me) => {
   const { id } = await c.params; const d = body.parse(await req.json());
   if (id === me.id && (d.active === false || (d.role && d.role !== "SUPER_ADMIN"))) return fail("You can't lock yourself out. Ask another Super Admin.", 400);
-  const [u] = await db.select().from(schema.users).where(eq(schema.users.id, id)); if (!u) return fail("Not found", 404);
+  const [u] = await db.select().from(schema.users).where(eq(schema.users.id, id)); if (!u || u.deletedAt) return fail("Not found", 404);
+  if (d.sites?.length) {   // every website in the list must exist
+    const ids = [...new Set(d.sites.map((s) => s.websiteId))];
+    const found = await db.select({ id: schema.websites.id }).from(schema.websites).where(and(inArray(schema.websites.id, ids), isNull(schema.websites.deletedAt)));
+    if (found.length !== ids.length) return fail("One of those websites does not exist any more. Reload the page and try again.", 422);
+  }
   const set: Record<string, unknown> = {}; if (d.active !== undefined) set.active = d.active; if (d.role) set.role = d.role;
   if (Object.keys(set).length) await db.update(schema.users).set(set).where(eq(schema.users.id, id));
   if (d.sites) {

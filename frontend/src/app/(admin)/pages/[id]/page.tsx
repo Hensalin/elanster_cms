@@ -84,8 +84,8 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
   saveRef.current = (quiet?: boolean) => { save(quiet); }; pubRef.current = () => { act("publish"); };
   const save = async (quiet?: boolean) => {
     setBusy(true);
-    try { const r = await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap() } });
-      if (!quiet) { toast("Draft saved. The live website is not changed yet."); await load(); } else { setDirty(false); setPage((p: any) => p && { ...p, unpublished: r.unpublished }); } } // eslint-disable-line @typescript-eslint/no-explicit-any
+    try { const r = await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap(), expectedUpdatedAt: page.updatedAt } });
+      if (!quiet) { toast("Draft saved. The live website is not changed yet."); await load(); } else { setDirty(false); setPage((p: any) => p && { ...p, unpublished: r.unpublished, updatedAt: r.updatedAt ?? p.updatedAt }); } } // eslint-disable-line @typescript-eslint/no-explicit-any
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const act = async (action: "publish" | "unpublish" | "discard" | "submit" | "withdraw" | "request_changes", note?: string) => {
@@ -93,7 +93,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
     setBusy(true);
     try {
       // Publishing or sending for review first saves what is on screen, so nothing typed is lost.
-      if ((action === "publish" || action === "submit") && !locked) await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap() } });
+      if ((action === "publish" || action === "submit") && !locked) await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap(), expectedUpdatedAt: page.updatedAt } });
       await api(`/api/v1/admin/pages/${id}/publish`, { method: "POST", body: { action, ...(note ? { note } : {}) } });
       if (action !== "publish") { toast(MSG[action]); setAsk(false); setNote(""); await load(); return; }
       if (action === "publish") { // connection check runs in the background, so publishing feels instant
@@ -149,9 +149,9 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
     <div style={{ display: "grid", gridTemplateColumns: "minmax(300px,380px) minmax(0,1fr)", gap: 16, alignItems: "start" }} className="pe">
       <div className="card" style={{ padding: 14, maxHeight: "calc(100vh - 150px)", overflow: "auto", position: "sticky", top: 12 }}>
         <input type="search" placeholder="Find text…" aria-label="Find text" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
-        <div className="seg seg-sm" role="tablist" aria-label="Which texts" style={{ marginBottom: 12 }}>
-          <button className={!onlyEdited ? "on" : ""} onClick={() => setEditedOnly(false)}>All texts <small>{fields.length}</small></button>
-          <button className={onlyEdited ? "on" : ""} onClick={() => setEditedOnly(true)}>Edited <small>{nEdited}</small></button></div>
+        <div className="seg seg-sm" role="group" aria-label="Which texts" style={{ marginBottom: 12 }}>
+          <button className={!onlyEdited ? "on" : ""} aria-pressed={!onlyEdited} onClick={() => setEditedOnly(false)}>All texts <small>{fields.length}</small></button>
+          <button className={onlyEdited ? "on" : ""} aria-pressed={!!onlyEdited} onClick={() => setEditedOnly(true)}>Edited <small>{nEdited}</small></button></div>
         {groups.map((g, gi) => (
           <details key={g} open={!!q || gi === 0 || groups.length < 3 || fields.some((f) => f.group === g && f.key === active)} style={{ marginBottom: 8 }}>
             <summary style={{ cursor: "pointer", fontWeight: 700, padding: "6px 0" }}>{g} <small style={{ color: "var(--muted)", fontWeight: 400 }}>({shown.filter((f) => f.group === g).length})</small></summary>
@@ -174,7 +174,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
       </div>
       <div className="card" style={{ padding: 12, minHeight: 400, minWidth: 0, overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-          <div className="seg" role="tablist" aria-label="Preview size"><button className={mode === "desktop" ? "on" : ""} onClick={() => setMode("desktop")}>Desktop</button><button className={mode === "tablet" ? "on" : ""} onClick={() => setMode("tablet")}>Tablet</button><button className={mode === "mobile" ? "on" : ""} onClick={() => setMode("mobile")}>Phone</button></div>
+          <div className="seg" role="group" aria-label="Preview size"><button className={mode === "desktop" ? "on" : ""} aria-pressed={mode === "desktop"} onClick={() => setMode("desktop")}>Desktop</button><button className={mode === "tablet" ? "on" : ""} aria-pressed={mode === "tablet"} onClick={() => setMode("tablet")}>Tablet</button><button className={mode === "mobile" ? "on" : ""} aria-pressed={mode === "mobile"} onClick={() => setMode("mobile")}>Phone</button></div>
           {base && <a className="btn sm" href={base + "/" + (page.file || "index.html")} target="_blank" rel="noopener">Open live page ↗</a>}
         </div>
         {src ? (() => {

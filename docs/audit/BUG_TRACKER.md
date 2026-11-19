@@ -1,0 +1,45 @@
+# Bug tracker — audit of 19 Nov 2026
+
+Scope: the Elanster CMS (admin and editor dashboards, blog CMS, page editor, API, database) and the We Are Zion website that it manages.
+Every item below was found with a test or by reading the code, and every fix was retested. Evidence: `evidence/regression.txt`.
+
+Severity: CRITICAL · HIGH · MEDIUM · LOW · INFORMATIONAL. Status: **Fixed** (in the CMS folder), **Fix ready** (file given, you must upload it), **Open** (not fixed, see "remaining risk").
+
+| ID | Module | Issue | Severity | Root cause | Evidence | Fix | Retest | Status |
+|---|---|---|---|---|---|---|---|---|
+| SEC-01 | Sign-in | A stolen or old sign-in kept working after the password was changed or reset (up to 8 h) | MEDIUM | The sign-in token had no link to the password; nothing invalidated it | `sec.mjs`: old cookie still 200 after reset | New `users.sessions_valid_after`; tokens issued earlier are refused; own password change keeps the current device signed in | 401 for old token, 200 for new | Fixed |
+| SEC-02 | Image upload | The file type was taken from the browser's claim; an HTML file named `.png` could be stored | MEDIUM | `file.type` trusted, bytes never checked | `sec.mjs`: HTML-as-PNG accepted before fix | Real type read from the file's first bytes (PNG/JPEG/GIF/WebP/AVIF only); file names cleaned | 400 for fake image, 201 for real PNG | Fixed |
+| SEC-03 | Website sync / connection check / image links | The server fetched any address (also private network addresses), with no size limit; image import checked DNS only once and read unlimited bodies | MEDIUM (SSRF) | Plain `fetch()` on user-controlled addresses | Code review (`sitescan.ts`, `check/route.ts`, `from-url/route.ts`) | New `lib/netguard.ts`: every hop checked against private/loopback/link-local/metadata ranges, 5 redirects max, time-out, size cap while streaming | Code + `sec.mjs` (local copy allows private addresses only when `ALLOW_PRIVATE_FETCH=1`) | Fixed |
+| SEC-04 | Media files | Imported pictures from a website were saved with the type the website claimed (could be SVG) and served from the CMS address | MEDIUM | Type header trusted in `sitescan.ts` | Code review | Imported pictures must be real raster images; every media file is served with `Content-Security-Policy: sandbox` and `nosniff`, non-images as downloads | `sec.mjs` header check | Fixed |
+| SEC-05 | Admin API | No cross-site request forgery defence besides SameSite cookies | LOW | Design | `sec.mjs` | Changes accept only JSON or file uploads (415 otherwise) and refuse `Sec-Fetch-Site: cross-site` (403) | 415/403 | Fixed |
+| SEC-06 | CMS screens | No Content-Security-Policy | LOW | Not configured | `curl -I` | CSP added for production (self scripts, https images, website preview frames); verified no violations on 7 screens | `ui-csp.mjs`: 0 problems | Fixed |
+| SEC-07 | Sign-in | Failed sign-ins were not recorded | LOW | Not implemented | Code review | Each failure is written to the activity log (never the password) | Activity log | Fixed |
+| SEC-08 | My account | Guessing the current password on the account page was not rate-limited | LOW | Missing limit | Code review | 10 tries per 15 minutes | Code | Fixed |
+| SEC-09 | Rate limits | Visitor address read from `X-Forwarded-For` first (can be spoofed on some hosts) | LOW | Header choice | Code review | `X-Real-IP` (set by Vercel) first | Code | Fixed |
+| SEC-10 | Backend headers | `X-Powered-By` revealed the framework; no `Permissions-Policy` | LOW | Defaults | `curl -I` | Removed / added | `sec.mjs` | Fixed |
+| SEC-11 | Repository | `backend/.env.example` contained the real Supabase host and user name (no password) | INFORMATIONAL | Example copied from real values | Git scan | Replaced with placeholders | File | Fixed |
+| SEC-12 | We Are Zion website | Server source code, `.env.example`, Python tools, SEO notes, a Windows shortcut and a 15 MB zip of the whole site are publicly downloadable | MEDIUM | No `.vercelignore` | Live check: `/server/server.js` 200, `/we-are-zion-website-v1.0.1.zip` 200 (15.5 MB) | `.vercelignore` | — | Fix ready |
+| SEC-13 | We Are Zion website | Missing `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, frame protection | LOW | Static site defaults | Live headers check | `vercel.json` headers (frame-ancestors keeps the CMS preview working) | — | Fix ready |
+| FUN-01 | Article and page editors | Two people editing at once: the later save silently overwrote the earlier one | MEDIUM | No version check | `concurrency.mjs` | Screens send the version they opened; an older version gets a clear 409 message | 409 for stale screen, 200 otherwise | Fixed |
+| FUN-02 | Users | Giving someone a website that no longer exists crashed (500) | LOW | No existence check | `users.mjs` | Checked first (422/404) | Pass | Fixed |
+| STB-01 | Public API | A database outage produced a bare 500 page | LOW | No error wrapper on public routes | Outage test | Clean JSON 503; the website keeps its own text | Pass | Fixed |
+| STB-02 | Health check | Returned 200 even when the database was down, so monitors could not notice | LOW | Status always 200 | Outage test | 503 when the database is unreachable | Pass | Fixed |
+| STB-03 | Sign-in | Database outage showed "Server error" | LOW | Generic message | Outage test | "The CMS cannot reach its database right now" (503) | Pass | Fixed |
+| PERF-01 | Public API | Every website visit wrote "key last used" to the database | LOW | Write on every request | Code review | Written at most every 5 minutes | Load test | Fixed |
+| PERF-02 | Database | Missing indexes for media, activity and published-article lists | LOW | Not created | Schema review | 4 indexes in `SUPABASE-UPDATE.sql` | Applied | Fixed |
+| RESP-01 | CMS on phones/tablets | Content list, page editor and dashboard were squeezed into unusable columns; top bar buttons cut off | HIGH (usability) | Later desktop CSS rules overrode the earlier small-screen rules | Screenshots at 375 px | Final small-screen rules (single column, normal scrolling dashboard, compact top bar, scrollable tables) | 6 screens × 9 widths, no overflow; screenshots | Fixed |
+| A11Y-01 | CMS | 25+ text colour contrast failures, image box with buttons inside a button, wrong ARIA roles | MEDIUM | Light grey text, nested controls | axe-core | Darker grey/orange/green text, fixed roles | 0 violations on 6 screens | Fixed |
+| SEO-01 | Website (new CMS articles) | A new article shown on another article's page kept that page's canonical address and article data | LOW | Static page reused | `ui-canon.mjs` | Canonical/og:url set to the article's own address, wrong BlogPosting data removed | Pass | Fixed |
+| BLD-01 | Backend build | Build printed 7 alarming "cookies() rejects" errors | INFORMATIONAL | Next.js build-time test caught by our error handler | `next build` log | Re-thrown to Next.js | 0 error lines | Fixed |
+| OPEN-01 | Sign-in | No two-step sign-in (MFA) for admins | HIGH | Not built | — | Recommend TOTP for Super/Website Admins | — | Open |
+| OPEN-02 | Sign-in | No "forgot password" by email (Super Admin gives a temporary password) | MEDIUM | No email service connected | — | Connect an email service | — | Open |
+| OPEN-03 | Data | Database backups not verified and never restored as a test | MEDIUM | No access to Supabase settings | — | Turn on daily backups / PITR; test a restore | — | Open (needs you) |
+| OPEN-04 | Secrets | A database password and a Vercel token were shared in earlier chats | MEDIUM | Shared in conversation | — | Rotate both now | — | Open (needs you) |
+| OPEN-05 | Sign-out | Signing out removes the cookie but does not invalidate a copied token (valid 8 h) | LOW | Stateless tokens | `sec.mjs` | Optional: token list or shorter lifetime | — | Open |
+| OPEN-06 | CSP | Scripts still allow `'unsafe-inline'` (needed by Next.js start-up scripts) | LOW | Framework | — | Nonce-based CSP later | — | Open |
+| OPEN-07 | SSRF | Small window between the address check and the download (DNS rebinding) | LOW | `fetch()` resolves again | — | Pin the checked IP with a custom agent | — | Open |
+| OPEN-08 | Scale | Pictures are stored inside the database | LOW | Design | — | Move to Supabase Storage + CDN when the library grows | — | Open |
+| OPEN-09 | Code quality | 59 ESLint findings in the frontend (mostly `any` types and React hook style), 1 in the backend | LOW | — | `eslint` | Clean up gradually; builds are not affected | — | Open |
+| OPEN-10 | Website | Two horizontally scrolling rows on the home page cannot be reached with the keyboard | LOW | Site markup | axe-core | Add `tabindex="0"` to `.vg__row--l` | — | Open (website code) |
+| OPEN-11 | Website SEO | New CMS articles live at `…?article=name` and are not in `sitemap.xml` | INFORMATIONAL | Static website | — | Generate real article pages when publishing (future feature) | — | Open |
+| OPEN-12 | Dependencies | 4 moderate advisories in a development-only tool (`drizzle-kit` → `esbuild`) | INFORMATIONAL | Upstream | `npm audit` | Not shipped to production; update when a fixed version exists | — | Open |

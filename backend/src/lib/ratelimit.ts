@@ -19,7 +19,8 @@ export async function blocked(key: string, limit: number): Promise<boolean> {
   return Number(row?.count ?? 0) >= limit;
 }
 export async function clear(key: string) { await db.execute(sql`DELETE FROM rate_limits WHERE key = ${key}`); }
-export const ipOf = (req: Request) => (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+// The visitor's address as set by the hosting platform (Vercel sets x-real-ip; a visitor cannot fake it).
+export const ipOf = (req: Request) => (req.headers.get("x-real-ip") ?? req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
 
 /** Save a copy of an article or page (keeps the newest 20). */
 export async function saveVersion(entity: "blog" | "page", entityId: string, websiteId: string, userId: string, data: unknown) {

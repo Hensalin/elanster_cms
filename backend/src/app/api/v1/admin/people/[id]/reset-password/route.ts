@@ -11,7 +11,7 @@ export const POST = admin<{ params: Promise<{ id: string }> }>(async (_req, { pa
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, id));
   if (!u || u.deletedAt) return fail("Not found", 404);
   const temp = "Tmp-" + randomBytes(9).toString("base64url");
-  await db.update(schema.users).set({ passwordHash: await hashPassword(temp) }).where(eq(schema.users.id, id));
+  await db.update(schema.users).set({ passwordHash: await hashPassword(temp), sessionsValidAfter: new Date() }).where(eq(schema.users.id, id));
   await db.delete(schema.rateLimits).where(eq(schema.rateLimits.key, "login:" + u.email.toLowerCase())).catch(() => {});
   await db.insert(schema.activityLogs).values({ userId: me.id, action: "USER_UPDATE", summary: `${me.name} reset the password of ${u.name}` });
   return json({ password: temp });

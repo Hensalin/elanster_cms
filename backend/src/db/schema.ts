@@ -25,6 +25,8 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: roleEnum("role").notNull().default("EDITOR"),
   active: boolean("active").notNull().default(true),
+  // Sign-ins issued before this moment no longer work (set when the password changes or is reset: "sign out everywhere").
+  sessionsValidAfter: timestamp("sessions_valid_after", { withTimezone: true }),
   createdAt: createdAt(), updatedAt: updatedAt(), deletedAt: deletedAt(),
 });
 
@@ -34,6 +36,14 @@ export const websites = pgTable("websites", {
   slug: text("slug").notNull().unique(), // short key, e.g. "elanster"
   domain: text("domain").notNull().default(""),
   active: boolean("active").notNull().default(true),
+  // Git publishing: on Publish the CMS writes the website's real files to this GitHub repo ("owner/name"). Empty = off.
+  gitRepo: text("git_repo").notNull().default(""),
+  gitBranch: text("git_branch").notNull().default("main"),
+  gitStatus: text("git_status").notNull().default(""),   // "" | RUNNING | OK | WARN | FAILED
+  gitMessage: text("git_message").notNull().default(""),
+  gitCommit: text("git_commit").notNull().default(""),
+  gitAt: timestamp("git_at", { withTimezone: true }),
+  gitAgain: boolean("git_again").notNull().default(false), // something was published while a run was busy
   createdAt: createdAt(), updatedAt: updatedAt(), deletedAt: deletedAt(),
 });
 
@@ -222,3 +232,14 @@ export const pageRelations = relations(pages, ({ one }) => ({
 export const versionRelations = relations(versions, ({ one }) => ({
   user: one(users, { fields: [versions.userId], references: [users.id] }),
 }));
+
+// What the CMS last wrote to a website's repo. `original` is the file as it was before any CMS edit (pages), so edits are always
+// applied to the untouched original; `lastSha` tells us if someone changed the file in Git behind the CMS's back.
+export const gitFiles = pgTable("git_files", {
+  websiteId: text("website_id").notNull().references(() => websites.id, { onDelete: "cascade" }),
+  path: text("path").notNull(),
+  kind: text("kind").notNull(),                // page | article | asset | sitemap
+  original: text("original"),
+  lastSha: text("last_sha").notNull().default(""),
+  updatedAt: updatedAt(),
+}, (t) => [primaryKey({ columns: [t.websiteId, t.path] })]);

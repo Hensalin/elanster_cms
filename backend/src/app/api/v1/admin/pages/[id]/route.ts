@@ -31,12 +31,15 @@ export const PUT = admin<{ params: Promise<{ id: string }> }>(async (req, { para
   if (!canEdit(role)) return fail("Forbidden", 403);
   // While an editor's changes wait for review they stay as sent; an admin can still adjust them before publishing.
   if (p.reviewState === "WAITING" && !canPublish(role)) return fail("This page is waiting for review. You can edit it again after an admin publishes it or sends it back, or take it back from review.", 409);
-  const { draft } = draftSchema.parse(await req.json());
+  const raw = await req.json();
+  const { draft } = draftSchema.parse(raw);
+  const seen = raw && typeof raw.expectedUpdatedAt === "string" ? new Date(raw.expectedUpdatedAt).getTime() : NaN;
+  if (!isNaN(seen) && p.updatedAt.getTime() > seen + 1) return fail("Someone else saved this page after you opened it. Reload to see their changes, then apply yours again.", 409);
   const c = readContent(p.content);
   const orig = new Map(c.fields.map((f) => [f.key, f.text]));
   const clean: Record<string, string> = {};
   for (const [k, v] of Object.entries(draft)) if (orig.has(k) && v !== orig.get(k)) clean[k] = v;
   if (JSON.stringify(c.draft) !== JSON.stringify(clean)) await saveVersion("page", p.id, p.websiteId, user.id, { draft: c.draft });
-  await db.update(schema.pages).set({ content: writeContent({ ...c, draft: clean }), editedBy: user.id }).where(eq(schema.pages.id, id));
-  return json({ ok: true, edited: Object.keys(clean).length, unpublished: hasUnpublished({ ...c, draft: clean }) });
+  const [after] = await db.update(schema.pages).set({ content: writeContent({ ...c, draft: clean }), editedBy: user.id }).where(eq(schema.pages.id, id)).returning({ updatedAt: schema.pages.updatedAt });
+  return json({ ok: true, edited: Object.keys(clean).length, unpublished: hasUnpublished({ ...c, draft: clean }), updatedAt: after?.updatedAt });
 });

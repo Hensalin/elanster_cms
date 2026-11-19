@@ -151,6 +151,11 @@
       body.innerHTML = a.content;
       if (h && a.title) setText(h, a.title);
       if (a.seo && a.seo.title) { document.title = a.seo.title; metaSet('meta[property="og:title"]', a.seo.title); }
+      if (wanted) {   // an article shown on another article's page: its address is its own, and the other article's data is removed
+        var can = document.querySelector('link[rel="canonical"]'); if (can) can.setAttribute("href", location.href.split("#")[0]);
+        metaSet('meta[property="og:url"]', location.href.split("#")[0]);
+        document.querySelectorAll('script[type="application/ld+json"]').forEach(function (sc) { if (/BlogPosting|"Article"/.test(sc.textContent || "")) sc.remove(); });
+      }
       if (a.seo && a.seo.description) { metaSet('meta[name="description"]', a.seo.description); metaSet('meta[property="og:description"]', a.seo.description); }
       // Cover picture: the marked one, or the first picture between the title and the article text.
       var cover = document.querySelector("[data-cms-cover]");

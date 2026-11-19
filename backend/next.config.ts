@@ -6,9 +6,11 @@ const security = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  poweredByHeader: false,
   async headers() { return [{ source: "/((?!api/v1/websites|api/v1/media).*)", headers: security }]; },
   // Opening the backend address in a browser goes to the admin app (set FRONTEND_URL in Vercel).
   async redirects() {

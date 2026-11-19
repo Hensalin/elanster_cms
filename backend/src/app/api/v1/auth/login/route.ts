@@ -20,11 +20,13 @@ export async function POST(req: Request) { try {
   const ok = u ? await verifyPassword(parsed.data.password, u.passwordHash) : await verifyPassword(parsed.data.password, "$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidinv");
   if (!u || !ok) {
     await hit(key, 8, 900_000);
+    // Failed sign-ins are recorded (never the password), so repeated guessing is visible in the activity log.
+    await db.insert(schema.activityLogs).values({ userId: u?.id ?? null, action: "LOGIN_FAILED", summary: `Failed sign-in for ${email.slice(0, 120)}` }).catch(() => {});
     return fail("Wrong email or password", 401);
   }
   await clear(key);
   await createSession(u.id);
   await db.insert(schema.activityLogs).values({ userId: u.id, action: "LOGIN", summary: `${u.name} signed in` });
   return json({ user: { id: u.id, name: u.name, email: u.email, role: u.role } });
-  } catch (e) { console.error(e); return fail("Server error", 500); }
+  } catch (e) { console.error(e); return fail("The CMS cannot reach its database right now. Try again in a minute.", 503); }
 }

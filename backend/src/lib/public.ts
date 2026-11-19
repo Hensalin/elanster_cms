@@ -8,6 +8,10 @@ const CORS = {
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Max-Age": "86400",
 };
+/** Public routes never answer with a bare crash: if the database is unreachable the website gets a clean 503 and keeps its own text. */
+export const safe = <A extends unknown[]>(fn: (...a: A) => Promise<Response | undefined>) => async (...a: A): Promise<Response> => {
+  try { return (await fn(...a)) ?? pubError("Not found", 404); } catch (e) { console.error(e); return pubError("Temporarily unavailable", 503); }
+};
 export const preflight = () => new Response(null, { status: 204, headers: CORS });
 export const pub = (data: unknown, status = 200, extra: Record<string, string> = {}) =>
   Response.json(data, { status, headers: { ...CORS, "Cache-Control": "public, max-age=0, s-maxage=30", ...extra } });

@@ -1,0 +1,9 @@
+Public: page texts (what every visitor loads)   10 users    50 req   222 req/s  median    36 ms  p95    82 ms  errors 0
+Public: page texts (what every visitor loads)   50 users   250 req   275 req/s  median   161 ms  p95   359 ms  errors 0
+Public: page texts (what every visitor loads)  100 users   300 req   349 req/s  median   270 ms  p95   450 ms  errors 0
+Public: article list                            10 users    50 req   237 req/s  median    36 ms  p95    68 ms  errors 0
+Public: article list                            50 users   250 req   236 req/s  median   205 ms  p95   250 ms  errors 0
+Public: article list                           100 users   300 req   261 req/s  median   360 ms  p95   454 ms  errors 0
+Admin: dashboard numbers                        10 users    50 req   124 req/s  median    78 ms  p95    99 ms  errors 0
+Admin: dashboard numbers                        50 users   250 req   134 req/s  median   366 ms  p95   400 ms  errors 0
+Admin: dashboard numbers                       100 users   300 req   132 req/s  median   744 ms  p95   880 ms  errors 0

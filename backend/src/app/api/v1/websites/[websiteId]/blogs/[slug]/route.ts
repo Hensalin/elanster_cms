@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { authorize, livePublished, notDeleted, preflight, pub, pubError, publicBlog } from "@/lib/public";
+import { authorize, livePublished, notDeleted, preflight, pub, pubError, publicBlog, safe } from "@/lib/public";
 
 export const OPTIONS = preflight;
-export async function GET(req: Request, { params }: { params: Promise<{ websiteId: string; slug: string }> }) {
+export const GET = safe(async function GET(req: Request, { params }: { params: Promise<{ websiteId: string; slug: string }> }) {
   const { websiteId, slug } = await params;
   const a = await authorize(req, websiteId);
   if ("error" in a) return a.error;
@@ -13,4 +13,4 @@ export async function GET(req: Request, { params }: { params: Promise<{ websiteI
   });
   if (!b) return pubError("Article not found", 404);
   return pub(publicBlog(b, new URL(req.url).origin, true));
-}
+});

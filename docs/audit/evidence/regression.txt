@@ -1,0 +1,171 @@
+===== Postman backend collection
+│                requests │                 51 │                  0 │
+│              assertions │                 88 │                  0 │
+===== Security tests (production build)
+PASS  Unknown email gives the same answer as a wrong password
+PASS  Wrong password refused
+PASS  Super admin can sign in
+PASS  Session cookie is HttpOnly and SameSite  (cms_session=<token>; Path=/; Expires=Thu, 19 Nov 2026 19:54:22 GMT; Max-Age=28800; Secure;)
+PASS  Forged session token refused
+PASS  alg=none token refused
+PASS  Plain-text (form) request to admin API refused  (415)
+PASS  Cross-site request to admin API refused  (403)
+PASS  Form-encoded request refused  (415)
+PASS  SVG upload refused
+PASS  HTML disguised as PNG refused (bytes checked)  (400)
+PASS  Real PNG accepted
+PASS  File name cleaned  (abc.png)
+PASS  Upload without sign-in refused
+PASS  Served picture has nosniff + sandbox CSP
+PASS  Public API without key refused
+PASS  Zion key cannot read Elanster  (403)
+PASS  Public API returns only published articles
+PASS  SQL-injection-like slug is harmless (404)  (404)
+PASS  Article HTML cleaned (no script, onerror, javascript:, iframe)  (<p>hi<img src="x" /><a>x</a></p>)
+PASS  Old sign-in stops working after a password reset  (401)
+PASS  New sign-in with the temporary password works
+PASS  Changing own password works and keeps this device signed in
+PASS  Other devices signed out after a password change  (401)
+PASS  Repeated wrong passwords get locked (429)  (429)
+PASS  Backend sends nosniff / frame / referrer headers
+PASS  Backend does not reveal X-Powered-By
+
+27 passed, 0 failed
+===== Access control: other website
+anonymous          all 34 blocked
+zeditor@test.com   all 34 blocked
+zadmin@test.com    all 34 blocked
+===== Access control: editor on own website
+editor blocked on all 15 admin actions on own website
+===== User management
+PASS  Sign up accepted
+PASS  Duplicate sign up gives the same answer (no enumeration)
+PASS  Invalid sign up refused
+PASS  New account cannot sign in before approval
+PASS  Super Admin sees the request
+PASS  Approve + give website
+PASS  Approved person can sign in
+PASS  They see only their website  (5)
+PASS  Switch off
+PASS  Switched-off person is signed out at once
+PASS  Temporary password works
+PASS  Super Admin cannot demote themself
+PASS  Delete person
+PASS  Deleted person cannot sign in
+PASS  Unknown website in access list handled cleanly (not 500)  (404)
+
+15 passed, 0 failed
+===== Concurrent editing
+PASS  First save works
+PASS  Second save from an old screen is refused (409)  (409)
+PASS  Saving again from the up-to-date screen works
+PASS  Page save works
+PASS  Page save from an old screen is refused (409)  (409)
+PASS  Older clients without the check still work
+
+6 passed, 0 failed
+===== Page review workflow (Editor -> Website Admin)
+EDITOR buttons: ↶ Undo | ↷ Redo | Save draft | Send for review | Discard changes
+EDITOR after typing: ↶ Undo | ↷ Redo | Save draft1 | Send for review | Discard changes | header: We Are Zion · 3 edited texts · 1 unsaved
+EDITOR after send: Take back to edit | badge: Waiting for review | readonly: 
+EDITOR direct publish API: 403 | save while waiting: 409 | open Elanster page: 403
+EDITOR dash sent-for-review: Page: Home | errors: []
+ADMIN bell: 2
+ADMIN notes: Page waiting for review: Home || “Raya And The Last Dragon — a story of trust” is live
+ADMIN needs review card: Page: Home
+ADMIN buttons: ↶ Undo | ↷ Redo | Save draft | Approve & publish | Request changes | Discard changes | banner: Eli Editor sent these changes for review on Nov 19, 2026, 5:24 PM. Check them in the previ
+ADMIN after request: ↶ Undo | ↷ Redo | Save draft | Publish | Discard changes | Unpublish | open Elanster page: 403 | errors: []
+EDITOR banners: Changes requested on “Page: Home”: Please keep the church name first.Open
+EDITOR resend: Waiting for review
+ADMIN after publish: Published ↶ Undo | ↷ Redo | Save draft | Publish | Discard changes | Unpublish
+EDITOR notes: Your changes to Home are live
+===== Suggested changes to a live article
+EDITOR bar: Preview | Save changes | Send for review | banner: This article is live. Edit it here and press Send for review
+EDITOR after send: Preview | Take back to edit | live title still: Raya And The Last Dragon — a story of trust
+ADMIN bell: Changes waiting for review: “Raya And The Last Dragon — a story of trust” || “Raya And The Last Dragon — a story of trust” is live
+ADMIN bar: Preview | Request changes | Discard | Approve & publish changes | title shown: Raya And The Last Dragon (editor suggestion)
+EDITOR banners: Changes requested: Please shorten the title Edit the copy, then press Send for review again.
+ADMIN after approve: Preview | Unpublish | Update live article | live title: Raya And The Last Dragon — a story of trust | errors: []
+EDITOR bell: Your changes to “Raya And The Last Dragon — a story of trust” are live || Your changes to Home are live | errors: []
+===== Blog CMS end to end
+PASS  Draft saved with Ctrl+S  (Draft)
+PASS  Draft is NOT visible on the public API
+PASS  No data loss after refresh (list shows it)
+PASS  Fields kept after refresh
+PASS  Published article appears on the public API
+PASS  Correct slug  (e2e-test-article-1795089367849)
+PASS  Correct author  (Guest Writer)
+PASS  Has publication date
+PASS  Tags saved  (testing,e2e)
+PASS  SEO title and description
+PASS  Summary for the card
+PASS  Article text published as clean HTML  (<p>First paragraph of the test article.</p><p>Second paragraph with mo)
+PASS  Only one copy (no duplicates)
+PASS  Update reaches the public API, same address  (E2E test article 1795089367849 (updated))
+PASS  New article is the Latest card on the website
+PASS  Article opens with its own text on the website
+PASS  Unpublished article is gone from the public API  (404)
+PASS  Delete works
+PASS  No browser or server errors
+
+19 passed, 0 failed
+===== Every screen, menu, theme, search, bell, keyboard, sign out (3 roles)
+PASS  Super Admin: dashboard shows role chip
+PASS  Super Admin: every menu link opens (/ /content /websites /users /activity /categories /account)
+PASS  Super Admin: theme switch works  (dark)
+PASS  Super Admin: Ctrl+K search opens
+PASS  Super Admin: notifications open
+PASS  Super Admin: keyboard focus is visible  (A true)
+PASS  Super Admin: sign out ends the session  (401)
+PASS  Website Admin: dashboard shows role chip
+PASS  Website Admin: every menu link opens (/ /content /activity /categories /account)
+PASS  Website Admin: theme switch works  (dark)
+PASS  Website Admin: Ctrl+K search opens
+PASS  Website Admin: notifications open
+PASS  Website Admin: keyboard focus is visible  (A true)
+PASS  Website Admin: sign out ends the session  (401)
+PASS  Editor: dashboard shows role chip
+PASS  Editor: every menu link opens (/ /content /activity /categories /account)
+PASS  Editor has no Users / Websites admin links
+PASS  Editor: theme switch works  (dark)
+PASS  Editor: Ctrl+K search opens
+PASS  Editor: notifications open
+PASS  Editor: keyboard focus is visible  (A true)
+PASS  Editor: sign out ends the session  (401)
+
+22 passed, 0 failed
+===== Accessibility (axe-core, WCAG 2.2 AA)
+CMS login                  no violations
+CMS dashboard              no violations
+CMS content                no violations
+CMS page editor            no violations
+CMS article editor         no violations
+CMS account                no violations
+Website index.html         serious:scrollable-region-focusable(2) e.g. .vg__row--l
+Website blog.html          no violations
+Website blogs/ad-went.html no violations
+Website contact.html       no violations
+===== Production build: Content Security Policy check
+problems: []
+===== Website: canonical address for new articles
+PASS  New article page has its own address as canonical and no wrong article data {"canonical":"http://localhost:3204/blogs/water-all-around.html?article=raya-and-the-last-dragon","blogPostingLd":false,"h1":"Raya And The Last Dragon — a story of trust"} []
+===== Elanster demo (marked pages) still works
+[
+  'home.top.2 => Built to last.',
+  'home.top.5 => Book a Call',
+  'home.top.7 => &nbsp;— quick go-live'
+]
+errors []
+===== Website blog list follows the CMS
+blog.html {
+  big: [
+    'blogs/water-all-around.html?article=raya-and-the-last-dragon | Raya And The Last Dragon — a story of trust | http://localhost:3101/api/v1/media/9c7127a1b29823d'
+  ],
+  list: [
+    'blogs/water-all-around.html | Water All-Around (new photo) | http://localhost:3101/api/v1/media/917c43b14c | 1',
+    'blogs/online-yet-offline.html | Online Yet Offline | https://static.wixstatic.com/media/f3a51c_951 | 1',
+    'blogs/leaving-a-legacy-part-2.html | Leaving a Legacy ~ Part 2 | https://static.wixstatic.com/media/f3a51c_9ca | 1',
+    'blogs/leaving-a-legacy-part-1.html | Leaving a Legacy ~ Part 1 | https://static.wixstatic.com/media/f3a51c_7fd | 1'
+  ],
+  n: 12
+}

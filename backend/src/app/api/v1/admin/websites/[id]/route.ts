@@ -1,11 +1,16 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
+import { validBranch, validRepo } from "@/lib/github";
 import { admin, fail, json, normDomain } from "@/lib/http";
 import { syncPages } from "@/lib/sitescan";
 
 type Ctx = { params: Promise<{ id: string }> };
-const body = z.object({ name: z.string().min(2).max(80), domain: z.string().max(200), active: z.boolean() }).partial();
+const body = z.object({
+  name: z.string().min(2).max(80), domain: z.string().max(200), active: z.boolean(),
+  gitRepo: z.string().max(201).refine((r) => r === "" || validRepo(r), "Write the repository as owner/name, for example Hensalin/elanster_website-demo"),
+  gitBranch: z.string().max(100).refine((b) => validBranch(b), "That branch name is not valid"),
+}).partial();
 
 export const PUT = admin<Ctx>(async (req, { params }, user) => {
   const { id } = await params;
@@ -15,6 +20,7 @@ export const PUT = admin<Ctx>(async (req, { params }, user) => {
     if (d.domain) { const [same] = await db.select().from(schema.websites).where(and(eq(schema.websites.domain, d.domain), ne(schema.websites.id, id), isNull(schema.websites.deletedAt)));
       if (same) return fail(`This address is already connected as “${same.name}”. One address = one website — remove that one first.`, 409); }
   }
+  if (d.gitRepo !== undefined) d.gitRepo = d.gitRepo.trim();
   const [site] = await db.update(schema.websites).set(d).where(eq(schema.websites.id, id)).returning();
   if (!site) return fail("Not found", 404);
   await db.insert(schema.activityLogs).values({ userId: user.id, websiteId: id, action: "WEBSITE_UPDATE", entity: "website", entityId: id, summary: `Updated website ${site.name}` });

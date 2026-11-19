@@ -26,5 +26,7 @@ export async function GET() {
       if (missingTables.length && !problem) problem = "Database update not applied. Run backend/SUPABASE-UPDATE.sql in Supabase (or npm run db:update).";
     } catch { /* ignore */ }
   }
-  return NextResponse.json({ mode, host, port, sessionSecretSet: !!process.env.SESSION_SECRET, canConnect, missingTables, problem: problem || null });
+  // 503 when the database cannot be reached, so uptime monitors notice; the body explains the problem.
+  return NextResponse.json({ mode, host, port, sessionSecretSet: !!process.env.SESSION_SECRET, canConnect, missingTables, problem: problem || null },
+    { status: canConnect === true ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }

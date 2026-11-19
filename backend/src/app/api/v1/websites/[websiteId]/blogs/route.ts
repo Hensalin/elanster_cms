@@ -1,9 +1,9 @@
 import { and, count, desc, eq, ilike, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { authorize, livePublished, notDeleted, preflight, pub, publicBlog } from "@/lib/public";
+import { authorize, livePublished, notDeleted, preflight, pub, publicBlog, safe } from "@/lib/public";
 
 export const OPTIONS = preflight;
-export async function GET(req: Request, { params }: { params: Promise<{ websiteId: string }> }) {
+export const GET = safe(async function GET(req: Request, { params }: { params: Promise<{ websiteId: string }> }) {
   const a = await authorize(req, (await params).websiteId);
   if ("error" in a) return a.error;
   const u = new URL(req.url);
@@ -24,4 +24,4 @@ export async function GET(req: Request, { params }: { params: Promise<{ websiteI
   const rows = await db.query.blogs.findMany({ where, orderBy: desc(schema.blogs.publishedAt), limit, offset: (page - 1) * limit,
     with: { category: true, author: true, featuredImage: true, tagLinks: { with: { tag: true } } } });
   return pub({ items: rows.map((b) => publicBlog(b, u.origin, false)), total: n, page, pages: Math.max(1, Math.ceil(n / limit)) });
-}
+});

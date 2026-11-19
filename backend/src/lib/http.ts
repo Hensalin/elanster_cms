@@ -11,11 +11,20 @@ type Handler<C> = (req: Request, ctx: C, user: SessionUser) => Promise<Response>
 export function admin<C = unknown>(h: Handler<C>, opts?: { superOnly?: boolean }) {
   return async (req: Request, ctx: C) => {
     try {
+      // Changes only accept JSON (or a file upload). A form or plain-text request from another website is refused (CSRF defence).
+      if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        const ct = (req.headers.get("content-type") || "").toLowerCase();
+        if (ct && !ct.startsWith("application/json") && !ct.startsWith("multipart/form-data")) return fail("Unsupported request", 415);
+        const site = req.headers.get("sec-fetch-site");
+        if (site === "cross-site") return fail("Forbidden", 403);
+      }
       const user = await getUser();
       if (!user) return fail("Not signed in", 401);
       if (opts?.superOnly && user.role !== "SUPER_ADMIN") return fail("Forbidden", 403);
       return await h(req, ctx, user);
     } catch (e) {
+      // Next.js tests at build time whether a route can be made static; reading the sign-in cookie says "no". Let Next.js handle that quietly.
+      if (e instanceof Error && /prerender|dynamic server usage|HANGING_PROMISE/i.test(e.message + (e as { digest?: string }).digest)) throw e;
       if (e instanceof ZodError) return fail("Invalid data", 422, { details: e.flatten().fieldErrors });
       console.error(e);
       return fail("Server error", 500);

@@ -1,0 +1,19 @@
+{
+ "login": [],
+ "dash": [],
+ "CMS content": [],
+ "CMS page editor": [],
+ "CMS article editor": [],
+ "CMS account": [],
+ "index.html": [
+  {
+   "id": "scrollable-region-focusable",
+   "impact": "serious",
+   "n": 2,
+   "t": ".vg__row--l"
+  }
+ ],
+ "blog.html": [],
+ "blogs/ad-went.html": [],
+ "contact.html": []
+}

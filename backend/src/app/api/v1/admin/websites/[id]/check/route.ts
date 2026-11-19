@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { websiteRole } from "@/lib/auth";
 import { admin, fail, json } from "@/lib/http";
+import { safeFetch } from "@/lib/netguard";
 
 type Check = { ok: boolean; label: string; hint?: string };
 
@@ -19,7 +20,7 @@ export const GET = admin<{ params: Promise<{ id: string }> }>(async (_req, { par
   if (!site.active) { checks.push({ ok: false, label: "Website is turned on in the CMS", hint: "Click the power icon to turn it on. While it is off, the website cannot read anything." }); return done(); }
 
   const get = async (u: string, headers?: Record<string, string>) => {
-    try { const r = await fetch(u, { cache: "no-store", headers, signal: AbortSignal.timeout(8000) }); return { ok: r.ok, status: r.status, text: await r.text() }; }
+    try { const r = await safeFetch(u, { headers, maxBytes: 3_000_000, timeoutMs: 8000 }); return { ok: r.ok, status: r.status, text: r.text() }; }
     catch { return { ok: false, status: 0, text: "" }; }
   };
   const home = await get(base + "/");

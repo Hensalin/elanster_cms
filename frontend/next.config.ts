@@ -10,10 +10,16 @@ const security = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
+// Content Security Policy (production): only this app's own scripts run; pictures may come from any https address;
+// the page editor may show the real websites in its preview frame. ('unsafe-inline' is needed by Next.js start-up scripts.)
+const csp = ["default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob: https: http:",
+  "font-src 'self' data:", "connect-src 'self'", "frame-src https: http:", "frame-ancestors 'self'", "base-uri 'self'", "form-action 'self'", "object-src 'none'"].join("; ");
+if (process.env.NODE_ENV === "production") security.push({ key: "Content-Security-Policy", value: csp });
 const nextConfig: NextConfig = {
   // The admin screens are all client-side, so Next.js "instant navigation" checks only add dev warnings.
   cacheComponents: false,
   devIndicators: false,
+  poweredByHeader: false,
   async rewrites() { return [{ source: "/api/:path*", destination: `${BACKEND}/api/:path*` }, { source: "/preview/:path*", destination: `${BACKEND}/preview/:path*` }]; },
   async headers() { return [{ source: "/((?!api/).*)", headers: security }]; },
 };

@@ -16,7 +16,7 @@ export function ImageDrop({ websiteId, value, onChange, label = "Featured image"
   const importLink = async () => { if (!link.trim()) return; setBusy("Importing…"); setErr(""); try { onChange((await api("/api/v1/admin/media/from-url", { method: "POST", body: { websiteId, url: link.trim() } })).id); setLink(""); setLinkMode(false); } catch (e) { setErr((e as Error).message); } finally { setBusy(""); } };
   return (<div className="field">
     <label>{label}</label>
-    <div className={"idrop" + (over ? " over" : "") + (value ? " has" : "")} tabIndex={disabled ? -1 : 0} role="button" aria-label={value ? "Change image" : "Add image: click, drop or paste"}
+    <div className={"idrop" + (over ? " over" : "") + (value ? " has" : "")} tabIndex={disabled || value ? -1 : 0} role={value ? undefined : "button"} aria-label={value ? undefined : "Add image: click, drop or paste"}
       onClick={() => !value && !disabled && input.current?.click()} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !value) { e.preventDefault(); input.current?.click(); } }}
       onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); up(e.dataTransfer.files?.[0]); }}
       onPaste={(e) => { const f = [...e.clipboardData.files].find((x) => x.type.startsWith("image/")); if (f) { e.preventDefault(); up(f); } }}>
