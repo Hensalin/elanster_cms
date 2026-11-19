@@ -17,11 +17,23 @@ const INTRO: Record<Level, { title: string; text: string; chip: string }> = {
 };
 
 
+/** A number that counts up from 0 when the dashboard opens (shows the final number at once if motion is reduced). */
+function CountUp({ to }: { to: number }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setN(to); return; }
+    let raf = 0; const t0 = performance.now(), dur = 900;
+    const tick = (t: number) => { const k = Math.min(1, (t - t0) / dur); setN(Math.round(to * (1 - Math.pow(1 - k, 3)))); if (k < 1) raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf);
+  }, [to]);
+  return <>{n}</>;
+}
+
 function Ring({ pct, color }: { pct: number; color: string }) {
   const r = 26, c = 2 * Math.PI * r;
   return (<svg className="ring" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label={`${pct}%`}>
     <circle cx="32" cy="32" r={r} stroke="var(--panel)" strokeWidth="7" fill="none" />
-    <circle cx="32" cy="32" r={r} stroke={color} strokeWidth="7" fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 32 32)" />
+    <circle cx="32" cy="32" r={r} stroke={color} strokeWidth="7" fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 32 32)" className="ring-arc" style={{ ["--c" as string]: c } as React.CSSProperties} />
     <text x="32" y="36.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--ink)">{pct}%</text></svg>);
 }
 
@@ -94,9 +106,9 @@ export default function Dashboard() {
     <section className="hero2">
       <div className="hero2-txt">
         <span className="role-chip">{L.chip}</span>
-        <h1>Hi, {me?.name ? me.name.split(" ")[0] : "there"}!<br />What are we publishing today?</h1>
+        <h1>Hi, {me?.name ? me.name.split(" ")[0] : "there"}! <span className="wave" role="img" aria-label="waving hand">👋</span><br />What are we publishing today?</h1>
         <p>{L.text}</p>
-        <div className="kpis">{stats.map(([l, n, ic]) => <span className="kpi" key={l}>{ic}<b>{n}</b> {l}</span>)}</div>
+        <div className="kpis">{stats.map(([l, n, ic]) => <span className="kpi" key={l}>{ic}<b><CountUp to={n} /></b> {l}</span>)}</div>
       </div>
       <div className="feat">
         <Link className="feat-add" href="/content?new=1" aria-label="New article"><span><Plus size={20} /></span><b>New article</b></Link>

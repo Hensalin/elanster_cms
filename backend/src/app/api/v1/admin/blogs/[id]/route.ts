@@ -17,7 +17,8 @@ async function load(id: string, userId: Parameters<typeof websiteRole>[0]) {
 
 export const GET = admin<Ctx>(async (_r, { params }, user) => {
   const r = await load((await params).id, user);
-  return r.err ?? json(r.b);
+  // canPublish tells the editor screen which buttons to show (the server checks again on every action).
+  return r.err ?? json({ ...r.b, canPublish: canPublish(r.role ?? null), myRole: r.role });
 });
 
 export const PUT = admin<Ctx>(async (req, { params }, user) => {

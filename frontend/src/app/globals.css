@@ -757,3 +757,42 @@ textarea[readonly], input[readonly] { background: var(--soft, #f6f4f2); color: v
 .qe-author { display: grid; grid-template-columns: 70px minmax(0, 340px); justify-content: start; align-items: center; gap: 4px 12px; margin: 10px 0 14px; }
 .qe-author input { width: 100%; }
 .qe-author label { font-weight: 600; font-size: 13.5px; } .qe-author small { grid-column: 2; color: var(--muted); font-size: 12px; }
+
+/* Waving hand next to the greeting: waves a few times when the dashboard opens, and again on hover */
+.wave { display: inline-block; transform-origin: 70% 75%; animation: wave 1.8s ease-in-out .4s 2; }
+.hero2 h1:hover .wave { animation: wave 1.8s ease-in-out 1; }
+@keyframes wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20% { transform: rotate(-8deg); } 40% { transform: rotate(-4deg); } 50% { transform: rotate(10deg); } }
+@media (prefers-reduced-motion: reduce) { .wave { animation: none !important; } }
+
+/* Dashboard motion: things arrive one after another, numbers count up, rings draw, cards lift on hover */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  @keyframes draw { from { stroke-dashoffset: var(--c); } }
+  @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .dash .hero2-txt > * { animation: rise .55s cubic-bezier(.2,.8,.2,1) both; }
+  .dash .hero2-txt > *:nth-child(2) { animation-delay: .06s; } .dash .hero2-txt > *:nth-child(3) { animation-delay: .12s; } .dash .hero2-txt > *:nth-child(4) { animation-delay: .18s; }
+  .dash .kpi { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
+  .dash .kpi:nth-child(1) { animation-delay: .2s; } .dash .kpi:nth-child(2) { animation-delay: .26s; } .dash .kpi:nth-child(3) { animation-delay: .32s; } .dash .kpi:nth-child(4) { animation-delay: .38s; } .dash .kpi:nth-child(5) { animation-delay: .44s; }
+  .dash .feat > * { animation: rise .6s cubic-bezier(.2,.8,.2,1) both; }
+  .dash .feat > *:nth-child(1) { animation-delay: .1s; } .dash .feat > *:nth-child(2) { animation-delay: .18s; } .dash .feat > *:nth-child(3) { animation-delay: .26s; } .dash .feat > *:nth-child(4) { animation-delay: .34s; }
+  .dash .feat > a { transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s; }
+  .dash .feat > a:hover { transform: translateY(-5px); box-shadow: 0 16px 34px rgba(24,24,27,.12); }
+  .dash .feat > a svg { transition: transform .35s cubic-bezier(.2,.8,.2,1); } .dash .feat > a:hover svg { transform: scale(1.08) rotate(-3deg); }
+  .dash .feat-add span { transition: transform .3s cubic-bezier(.2,.8,.2,1); } .dash .feat-add:hover span { transform: rotate(90deg) scale(1.08); }
+  .dash > .note-banner { animation: rise .5s .3s both; }
+  .dash .bento > * { animation: rise .6s cubic-bezier(.2,.8,.2,1) both; }
+  .dash .bento > *:nth-child(1) { animation-delay: .35s; } .dash .bento > *:nth-child(2) { animation-delay: .43s; } .dash .bento > *:nth-child(3) { animation-delay: .51s; }
+  .dash .bento > *:nth-child(4) { animation-delay: .59s; } .dash .bento > *:nth-child(5) { animation-delay: .67s; } .dash .bento > *:nth-child(6) { animation-delay: .75s; }
+  .dash .bento .row, .dash .feed li, .dash .wk-box { transition: transform .2s, box-shadow .2s; }
+  .dash .bento .row:hover, .dash .feed li:hover, .dash .wk-box:hover { transform: translateX(4px); }
+  .dash .ring-arc { animation: draw 1.2s .7s cubic-bezier(.2,.8,.2,1) both; }
+  .dash .promo svg, .dash .promo img { animation: floaty 4s ease-in-out infinite; }
+  .dash .wd-dots i { animation: pop .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: .9s; }
+  .dash .wd { transition: background .2s, transform .2s; } .dash .wd:hover { transform: translateY(-2px); }
+  .dash .wk-list li { animation: rise .35s both; } .dash .wk-list li:nth-child(2) { animation-delay: .05s; } .dash .wk-list li:nth-child(3) { animation-delay: .1s; } .dash .wk-list li:nth-child(4) { animation-delay: .15s; }
+  .dash .empty-art svg { animation: floaty 5s ease-in-out infinite; }
+  /* the hand waves now and then, not all the time */
+  .wave { animation: wave-often 6s ease-in-out .4s infinite; }
+  @keyframes wave-often { 0%, 30%, 100% { transform: rotate(0); } 5%, 15% { transform: rotate(16deg); } 10% { transform: rotate(-8deg); } 20% { transform: rotate(-4deg); } 25% { transform: rotate(10deg); } }
+}

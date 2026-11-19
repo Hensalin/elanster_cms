@@ -42,7 +42,8 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
 
   const site = sites.find((x) => x.id === f.websiteId);
   const role = me ? (me.user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : me.websiteRoles[f.websiteId]) : null;
-  const canPublish = role === "SUPER_ADMIN" || role === "WEBSITE_ADMIN";
+  // The server says whether this person may publish on this article's website; until it answers, use the role we know.
+  const canPublish = typeof meta?.canPublish === "boolean" ? meta.canPublish : role === "SUPER_ADMIN" || role === "WEBSITE_ADMIN";
   const status: string = meta?.status ?? "DRAFT";
   const isLive = status === "PUBLISHED" || status === "SCHEDULED";
   const pState: string = meta?.pendingState ?? ""; const hasSug = !!meta?.pending; const sugMine = hasSug && meta?.pendingBy === me?.user?.id;
@@ -57,7 +58,7 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
     try {
       const body = { ...f, categoryId: f.categoryId || null, featuredImageId: f.featuredImageId || null, ogImageId: f.ogImageId || null, authorId: f.authorId || null };
       const b = isNew ? await api("/api/v1/admin/blogs", { method: "POST", body }) : await api(`/api/v1/admin/blogs/${curId}`, { method: "PUT", body });
-      setMeta(b); setDirty(false); setSavedAt(new Date());
+      setMeta((m: any) => ({ ...b, canPublish: m?.canPublish ?? b.canPublish })); setDirty(false); setSavedAt(new Date()); // eslint-disable-line @typescript-eslint/no-explicit-any
       if (!suggest) setF((x) => ({ ...x, slug: b.slug, excerpt: x.excerpt || b.excerpt, featuredImageId: x.featuredImageId || b.featuredImageId || "" }));
       if (!quiet) toast(suggest ? "Changes saved. The live article is not changed until an admin approves." : status === "PUBLISHED" ? "Live article updated" : "Draft saved");
       if (isNew) { setCurId(b.id); onCreated?.(b.id); } onChanged?.();
