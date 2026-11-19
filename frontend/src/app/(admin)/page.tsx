@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FilePlus2, FileText, Globe2, ShieldCheck, Users, Activity, Plus } from "lucide-react";
 import { CaughtUpArt, QuietArt, PromoArt, WriteArt, PagesArt, LiveArt } from "@/components/Illustrations";
 import { api, fmt, Status, useToast } from "@/components/ui";
+import { useSite } from "@/components/site";
 
 type Level = "super" | "admin" | "editor";
 type Stats = { level: Level; websites: number; published: number; drafts: number; review: number; pages: number; users: number;
@@ -45,10 +46,14 @@ export default function Dashboard() {
   const [health, setHealth] = useState<{ canConnect: boolean | string; problem: string | null; sessionSecretSet: boolean } | null>(null);
   useEffect(() => { fetch("/api/v1/health").then((r) => r.json()).then(setHealth).catch(() => {}); }, []);
   const [s, setS] = useState<Stats | null>(null); const [err, setErr] = useState(""); const { toast, el } = useToast();
-  const load = () => api<Stats>("/api/v1/admin/stats").then(setS).catch((e) => setErr(e.message));
-  const [me, setMe] = useState<{ name: string } | null>(null); const [live, setLive] = useState("");
-  useEffect(() => { load(); api("/api/v1/auth/me").then((r) => setMe(r.user)).catch(() => {});
-    api<any[]>("/api/v1/admin/websites").then((w) => { const a = w.find((x) => x.active && x.domain); if (a) setLive(a.domain); }).catch(() => {}); }, []);
+  const [site] = useSite();
+  const load = () => api<Stats>("/api/v1/admin/stats" + (site ? `?website=${site}` : "")).then(setS).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, [site]); // eslint-disable-line
+  const [me, setMe] = useState<{ name: string } | null>(null); const [live, setLive] = useState(""); const [linked, setLinked] = useState<boolean | null>(null);
+  useEffect(() => { api("/api/v1/auth/me").then((r) => setMe(r.user)).catch(() => {});
+    api<any[]>("/api/v1/admin/websites").then((w) => { const a = w.find((x) => x.id === site) ?? w.find((x) => x.active && x.domain); setLive(a?.domain ?? "");
+      // Really connected = the live website read content with its key in the last 7 days.
+      setLinked(!!a && a.active && !!a.lastSeen && Date.now() - +new Date(a.lastSeen) < 7 * 864e5); }).catch(() => {}); }, [site]);
   if (err) return <p className="err-text" role="alert">{err}</p>;
   if (!s) return <div className="skel" aria-busy="true"><div /><div /><div /></div>;
   const L = INTRO[s.level]; const canPub = s.level !== "editor";
@@ -80,6 +85,7 @@ export default function Dashboard() {
       </div>
     </section>
     {s.level === "editor" && s.changesRequested.map((b) => <div className="note-banner" key={b.id} role="note"><b>Changes requested on “{b.title}”:</b> {b.reviewNote}<Link className="btn sm" href={`/content?open=blogs:${b.id}`}>Open article</Link></div>)}
+    {s.level !== "super" && s.websites === 0 && <div className="note-banner" role="note"><b>You have no website to work on yet.</b> Ask your Super Admin to tick a website for you under Users.</div>}
     {s.level === "super" && s.pendingUsers > 0 && <div className="note-banner" role="note"><b>{s.pendingUsers} account{s.pendingUsers > 1 ? "s" : ""} waiting for approval.</b><Link className="btn sm" href="/users">Review</Link></div>}
     {s.level === "editor" ? <div className="bento">
       <div className="card s4"><h2>My drafts</h2>{list(s.myDrafts, "No drafts. Start a new article or open a page from Content.", "updatedAt")}</div>
@@ -95,8 +101,10 @@ export default function Dashboard() {
         {s.activity.length ? <ul className="feed">{s.activity.slice(0, 4).map((a) => <li key={a.id}><span className="feed-av" aria-hidden>{(a.user?.name ?? "S").slice(0, 1)}</span>
           <span className="feed-t">{a.summary}<small>{a.user?.name ?? "System"}</small></span><span className="feed-d">{fmt(a.createdAt)}</span></li>)}</ul>
           : <div className="empty-art"><QuietArt /><p>No activity yet.</p></div>}</div>
-      <div className="promo s2"><PromoArt /><h3>Go live!</h3><p>Connect your website so what you publish appears there automatically.</p>
-        <Link className="btn promo-btn" href={s.level === "super" ? "/websites" : "/content"}>{s.level === "super" ? "Connect" : "Open content"}</Link></div>
+      {linked ? <div className="promo promo--ok s2"><PromoArt /><h3>You&apos;re live</h3><p>Your website reads from the CMS. What you publish appears there within seconds.</p>
+        <Link className="btn promo-btn" href="/content?new=1">Write an article</Link></div>
+      : <div className="promo s2"><PromoArt /><h3>Go live!</h3><p>Connect your website so what you publish appears there automatically.</p>
+        <Link className="btn promo-btn" href={s.level === "super" ? "/websites" : "/content"}>{s.level === "super" ? "Connect" : "Open content"}</Link></div>}
       <div className="s5 stack">
         <div className="ring-row">
           <div className="card ring-card"><Ring pct={s.published + s.drafts ? Math.round((s.published / (s.published + s.drafts)) * 100) : 0} color="#1f9d55" />
@@ -104,7 +112,7 @@ export default function Dashboard() {
           <div className="card ring-card"><Ring pct={health ? (health.canConnect === true ? 50 : 0) + (health.sessionSecretSet ? 50 : 0) : 0} color="#f26f2c" />
             <div><small className="ring-k o">SYSTEM</small><b>Health</b><small>{health?.canConnect === true ? "Database OK" : "Checking…"}</small></div></div>
         </div>
-        <div className="card site-card"><div className="card-h"><h2>Your website</h2>{live && <span className="badge PUBLISHED">Online</span>}</div>
+        <div className="card site-card"><div className="card-h"><h2>Your website</h2>{live && (linked ? <span className="badge PUBLISHED">Connected</span> : <span className="badge IN_REVIEW">Not connected yet</span>)}</div>
           <p className="mut" style={{ margin: "0 0 12px", fontSize: 13.5 }}>{live ? live.replace(/^https?:\/\//, "").replace(/\/$/, "") : "No website address set yet."}</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{live && <a className="btn" href={live} target="_blank" rel="noreferrer">Open website</a>}
             <Link className="btn dark" href={s.level === "super" ? "/websites" : "/content"}>{s.level === "super" ? "Manage" : "Edit pages"}</Link></div>

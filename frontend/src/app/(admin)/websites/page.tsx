@@ -52,6 +52,8 @@ function AddSite({ onClose, onDone }: { onClose: () => void; onDone: (r: any) =>
   </form></div>);
 }
 
+const cmsPublicUrl = () => process.env.NEXT_PUBLIC_CMS_API_URL || "https://elanster-cms-five.vercel.app"; // always the live CMS address, a website cannot reach localhost
+const sharedSnippet = (key: string) => `(function(){var s=document.createElement("script");s.src="${cmsPublicUrl()}/cms.js";s.setAttribute("data-key","${key}");document.head.appendChild(s);})();`;
 function Keys({ site, onClose, toast }: { site: any; onClose: () => void; toast: (m: string, e?: boolean) => void }) {
   const [keys, setKeys] = useState<any[]>([]); const [fresh, setFresh] = useState(""); const [label, setLabel] = useState("Website");
   const load = useCallback(() => api(`/api/v1/admin/websites/${site.id}/api-keys`).then(setKeys), [site.id]);
@@ -59,8 +61,10 @@ function Keys({ site, onClose, toast }: { site: any; onClose: () => void; toast:
   return (<div className="modal" onClick={onClose}><div onClick={(e) => e.stopPropagation()}>
     <h2>API keys — {site.name}</h2>
     <p style={{ color: "var(--muted)" }}>This key lets <b>{site.name}</b> read its own published content. It cannot read other websites or any drafts.</p>
-    {fresh && <div style={{ marginBottom: 14 }}><p><b>Copy this key now. It will not be shown again.</b></p><div className="keybox">{fresh}</div>
-      <button className="btn sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(fresh); toast("Copied"); }}>Copy key</button></div>}
+    {fresh && <div style={{ marginBottom: 14 }}><p><b>Your script for all pages. Copy it now, it will not be shown again.</b></p>
+      <p style={{ color: "var(--muted)" }}>Paste it once at the very top of the JavaScript file that every page of {site.name} already loads. It then works on all those pages.</p>
+      <div className="keybox" style={{ wordBreak: "break-all" }}>{sharedSnippet(fresh)}</div>
+      <button className="btn sm dark" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(sharedSnippet(fresh)); toast("Script copied"); }}>Copy script</button></div>}
     <div style={{ display: "flex", gap: 8, marginBottom: 14 }}><input type="text" value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Key label" />
       <button className="btn dark" onClick={async () => { try { const r = await api(`/api/v1/admin/websites/${site.id}/api-keys`, { method: "POST", body: { label } }); setFresh(r.key); load(); } catch (e) { toast((e as Error).message, true); } }}>Create key</button></div>
     {keys.map((k) => (<div className="row" key={k.id}><div><b>{k.label}</b> <code>{k.prefix}…</code><small>Created {fmt(k.createdAt)} · last used {fmt(k.lastUsedAt)}</small></div>
@@ -95,7 +99,8 @@ function CheckPanel({ site, onClose }: { site: any; onClose: () => void }) {
     {err && <p className="err-text">{err}</p>}
     {checks && <ol className="checklist">{checks.map((c, i) => { const opt = (c.hint ?? "").startsWith("Optional");
       return <li key={i} className={c.ok ? "ok" : opt ? "opt" : "bad"}>{c.ok ? <CheckCircle2 size={18} /> : opt ? <CircleAlert size={18} /> : <XCircle size={18} />}
-        <div><b>{c.label}</b>{!c.ok && c.hint && <small>{c.hint}</small>}</div></li>; })}</ol>}
+        <div><b>{c.label}</b>{!c.ok && c.hint && <small>{c.hint}</small>}
+          {!c.ok && c.label === "Website is turned on in the CMS" && <button className="btn sm dark" style={{ marginTop: 8 }} onClick={async () => { try { await api(`/api/v1/admin/websites/${site.id}`, { method: "PUT", body: { active: true } }); run(); } catch (e) { setErr((e as Error).message); } }}><Power size={13} /> Turn on now</button>}</div></li>; })}</ol>}
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}><button className="btn" onClick={run} disabled={!checks}><RefreshCw size={14} /> Check again</button><button className="btn dark" onClick={onClose}>Done</button></div>
   </div></div>);
 }

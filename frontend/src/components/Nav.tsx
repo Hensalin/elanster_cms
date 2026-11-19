@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
-import { ChevronDown, Check, FileText, Globe, LayoutDashboard, LogOut, Moon, Plus, Search, Sun, Users, UserCog, History, Tags } from "lucide-react";
+import { Bell, CheckCircle2, MessageSquareWarning, ShieldCheck, UserPlus, ChevronDown, Check, FileText, Globe, LayoutDashboard, LogOut, Moon, Plus, Search, Sun, Users, UserCog, History, Tags } from "lucide-react";
 import { api } from "./ui";
 import { useSite } from "./site";
 import { CommandPalette } from "./CommandPalette";
+import { LogoMark } from "./Logo";
 
 type User = { name: string; email: string; role: string };
 const roleName = (r: string) => (r === "SUPER_ADMIN" ? "Super Admin" : r === "WEBSITE_ADMIN" ? "Admin" : "Editor");
@@ -30,8 +31,23 @@ export function Nav({ user }: { user: User }) {
   const [swOpen, setSwOpen] = useState(false); const [menu, setMenu] = useState(false); const [cp, setCp] = useState(false); const [q, setQ] = useState("");
   const [dark, setDark] = useState(false);
   const swRef = useRef<HTMLDivElement>(null); const menuRef = useRef<HTMLDivElement>(null);
+  // Notifications: what needs this person's attention. Checked on load, every minute and when the tab comes back.
+  type Note = { id: string; kind: string; title: string; text: string; href: string; at: string; action: boolean };
+  const [notes, setNotes] = useState<Note[]>([]); const [bell, setBell] = useState(false); const [seen, setSeen] = useState(0); const bellRef = useRef<HTMLDivElement>(null);
+  useOutside(bellRef, () => setBell(false), bell);
+  useEffect(() => {
+    try { setSeen(Number(localStorage.getItem("cms.notes.seen") || 0)); } catch { /* ignore */ }
+    const pull = () => api<{ items: Note[] }>("/api/v1/admin/notifications").then((r) => setNotes(r.items)).catch(() => {});
+    pull(); const t = setInterval(pull, 60_000); const v = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", v); return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); };
+  }, []);
+  const unread = notes.filter((n) => n.action || +new Date(n.at) > seen).length;
+  const openBell = () => { setBell((x) => !x); const now = Date.now(); setTimeout(() => { setSeen(now); try { localStorage.setItem("cms.notes.seen", String(now)); } catch { /* ignore */ } }, 1500); };
+  const NOTE_IC: Record<string, React.ReactNode> = { approve: <UserPlus size={15} />, review: <ShieldCheck size={15} />, changes: <MessageSquareWarning size={15} />, live: <CheckCircle2 size={15} /> };
   useOutside(swRef, () => setSwOpen(false), swOpen); useOutside(menuRef, () => setMenu(false), menu);
   useEffect(() => { api("/api/v1/admin/websites").then(setSites).catch(() => {}); }, []);
+  // A remembered website that was removed (or that this person lost access to) falls back to "All websites".
+  useEffect(() => { if (site && sites.length && !sites.some((s) => s.id === site)) setSite(""); }, [site, sites]); // eslint-disable-line
   useEffect(() => { try { const d = localStorage.getItem("cms.theme") === "dark"; setDark(d); document.documentElement.dataset.theme = d ? "dark" : "light"; } catch { /* ignore */ } }, []);
   const items = [
     { href: "/", label: "Dashboard", icon: <LayoutDashboard size={16} />, key: "1" },
@@ -61,7 +77,7 @@ export function Nav({ user }: { user: User }) {
         <defs><linearGradient id="railg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f5874c" /><stop offset=".55" stopColor="#f26f2c" /><stop offset="1" stopColor="#e2581c" /></linearGradient></defs>
         <path d="M0 0 C0 46 80 34 80 104 L80 456 C80 526 0 514 0 560 Z" fill="url(#railg)" />
       </svg>
-      <Link href="/" className="rail-logo" aria-label="Elanster CMS home">E</Link>
+      <Link href="/" className="rail-logo" aria-label="Elanster CMS home"><LogoMark size={46} /></Link>
       <nav className="rail-nav">
         {items.map((i) => <Link key={i.href} href={i.href} title={i.label} aria-label={i.label} aria-current={on(i.href) ? "page" : undefined} className={on(i.href) ? "on" : ""}>{React.cloneElement(i.icon as React.ReactElement<{ size?: number }>, { size: 19 })}</Link>)}
         <span className="rail-sep" />
@@ -80,7 +96,7 @@ export function Nav({ user }: { user: User }) {
             <div className="pop-search"><Search size={14} aria-hidden /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search websites…" aria-label="Search websites" /></div>
             <button role="option" aria-selected={!site} onClick={() => { setSite(""); setSwOpen(false); }}><span>All websites</span>{!site && <Check size={14} />}</button>
             {shown.map((s) => <button key={s.id} role="option" aria-selected={s.id === site} onClick={() => { setSite(s.id); setSwOpen(false); }}>
-              <span>{s.name}<small>{(s.domain || "").replace(/^https?:\/\//, "") || "no address yet"}</small></span>{s.id === site && <Check size={14} />}</button>)}
+              <span>{s.name}{!s.active && <em className="off-tag">Off</em>}<small>{(s.domain || "").replace(/^https?:\/\//, "") || "no address yet"}</small></span>{s.id === site && <Check size={14} />}</button>)}
             {!shown.length && <p className="pop-none">No website matches.</p>}
             {isSuper && <Link className="pop-add" href="/websites" onClick={() => setSwOpen(false)}><Plus size={14} /> Add website</Link>}
           </div>}
@@ -95,6 +111,16 @@ export function Nav({ user }: { user: User }) {
         <div className="theme-seg" role="group" aria-label="Theme">
           <button className={!dark ? "on" : ""} aria-pressed={!dark} onClick={() => dark && toggleTheme()}><Sun size={14} /> <span>Light</span></button>
           <button className={dark ? "on" : ""} aria-pressed={dark} onClick={() => !dark && toggleTheme()}><Moon size={14} /> <span>Dark</span></button></div>
+        <div className="menu-wrap" ref={bellRef}>
+          <button className="icon-btn bell" onClick={openBell} aria-haspopup="menu" aria-expanded={bell} aria-label={unread ? `${unread} notifications` : "Notifications"}>
+            <Bell size={16} />{unread > 0 && <span className="bell-n">{unread > 9 ? "9+" : unread}</span>}</button>
+          {bell && <div className="pop me-pop note-pop" role="menu">
+            <div className="note-h"><b>Notifications</b><small>{notes.filter((n) => n.action).length} need you</small></div>
+            {notes.length ? notes.map((n) => <button key={n.id} role="menuitem" className={"note k-" + n.kind + (n.action || +new Date(n.at) > seen ? " new" : "")} onClick={() => { setBell(false); router.push(n.href); }}>
+              <span className="note-ic">{NOTE_IC[n.kind]}</span><span className="note-t"><b>{n.title}</b><small>{n.text}</small><small className="note-at">{new Date(n.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</small></span></button>)
+              : <p className="pop-none">You&apos;re all caught up.</p>}
+          </div>}
+        </div>
         <div className="menu-wrap" ref={menuRef}>
           <button className="avatar-btn" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((x) => !x)} aria-label="Account menu">
             <span className="avatar" aria-hidden>{user.name.slice(0, 1).toUpperCase()}</span></button>

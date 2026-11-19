@@ -1,7 +1,7 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { accessibleWebsiteIds, canEdit, websiteRole } from "@/lib/auth";
-import { blogColumns, blogInput, blogWithRelations, setBlogTags, uniqueBlogSlug } from "@/lib/blogs";
+import { blogColumns, blogInput, checkBlogRefs, blogWithRelations, setBlogTags, uniqueBlogSlug } from "@/lib/blogs";
 import { admin, fail, json } from "@/lib/http";
 
 export const GET = admin(async (req, _c, user) => {
@@ -30,6 +30,7 @@ export const GET = admin(async (req, _c, user) => {
 export const POST = admin(async (req, _c, user) => {
   const d = blogInput.parse(await req.json());
   if (!canEdit(await websiteRole(user, d.websiteId))) return fail("You do not have access to this website", 403);
+  const bad = await checkBlogRefs(d, d.websiteId); if (bad) return fail(bad, 422);
   const slug = await uniqueBlogSlug(d.websiteId, d.slug || d.title);
   const [b] = await db.insert(schema.blogs).values({ ...blogColumns(d), websiteId: d.websiteId, slug, authorId: d.authorId || user.id }).returning();
   await setBlogTags(b.id, d.websiteId, d.tags);

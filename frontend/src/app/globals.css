@@ -608,3 +608,87 @@ body { background: var(--bg); }
 
 /* Article title: big and bold (the shorthand "font: … inherit" was ignored by browsers) */
 .qe-title { font-family: inherit !important; font-size: clamp(26px, 3vw, 36px) !important; font-weight: 750 !important; line-height: 1.15 !important; letter-spacing: -.02em; }
+.off-tag { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--panel); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+.promo--ok { background: radial-gradient(120% 100% at 100% 0%, #1f9d55 0%, transparent 55%), linear-gradient(160deg, #24216a 0%, #171545 70%); }
+
+/* Notification bell */
+.bell { position: relative; } .bell-n { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #f26f2c; color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--card); }
+.note-pop { width: 380px; max-height: 460px; padding: 6px; }
+.note-h { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; } .note-h small { color: var(--muted); }
+.pop button.note { align-items: flex-start; gap: 10px; padding: 10px; }
+.note-ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--panel); color: var(--muted); }
+.k-approve .note-ic { background: #f4edff; color: #7c3aed; } .k-review .note-ic { background: #fff1e8; color: #f26f2c; } .k-changes .note-ic { background: #fff4e5; color: #b45309; } .k-live .note-ic { background: #e9f7ee; color: #15803d; }
+[data-theme="dark"] .note-ic { background: var(--panel) !important; }
+.note-t { display: grid; gap: 1px; min-width: 0; text-align: left; } .note-t b { font-size: 13px; font-weight: 600; white-space: normal; } .note-t small { font-size: 12px; color: var(--muted); }
+.note-at { font-size: 11px !important; } .note.new .note-t b::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f26f2c; margin-right: 6px; vertical-align: 1px; }
+.rail-logo { background: none !important; box-shadow: 0 8px 18px -8px rgba(226,88,28,.6) !important; overflow: hidden; } .rail-logo svg { display: block; }
+
+/* =====================================================================
+   Brand: orange + black only (no blue/navy anywhere in the CMS)
+   ===================================================================== */
+:root { --navy: #141414; --blue: #141414; --blue-bg: #f1efed; }
+[data-theme="dark"] { --navy: #f26f2c; --blue: #f4f4f5; --blue-bg: #26262a; }
+.hero2 h1 { color: #141414; } [data-theme="dark"] .hero2 h1 { color: var(--ink); }
+.btn.dark { background: #141414; color: #fff; } .btn.dark:hover { background: #000; }
+[data-theme="dark"] .btn.dark { background: #f26f2c; } [data-theme="dark"] .btn.dark:hover { background: #e2611f; }
+.promo { background: radial-gradient(120% 100% at 100% 0%, #f26f2c 0%, transparent 60%), linear-gradient(160deg, #262626 0%, #0d0d0d 75%); box-shadow: 0 20px 40px -20px rgba(0,0,0,.55); }
+.promo--ok { background: radial-gradient(120% 100% at 100% 0%, #f26f2c 0%, transparent 60%), linear-gradient(160deg, #262626 0%, #0d0d0d 75%); }
+.promo-btn { color: #141414; }
+.qa-ic.b, .k-review .note-ic { background: #fff1e8; color: #f26f2c; }
+.badge.SCHEDULED { background: #f1efed; color: #141414; }
+.rail-nav a::after, .rail-me::after { background: #141414; }
+.ring-k.o { color: #f26f2c !important; }
+.wd.today b { background: #f26f2c; }
+.k-approve .note-ic { background: #141414; color: #fff; }
+.tl-dot[data-a="LOGIN"], .tl-dot[data-a="USER"], .tl-dot[data-a="SIGNUP"] { background: #141414; }
+.qa-ic.p { background: #141414; color: #fff; }
+.note-pop small, .note-pop b { text-transform: none !important; }
+
+/* =====================================================================
+   v9 — Font + cards like the reference: Plus Jakarta Sans, soft panels,
+   white floating items with gentle shadows, bold tight headings
+   ===================================================================== */
+:root { --soft: #f6f4f2; --float: 0 10px 24px -14px rgba(20,20,20,.22), 0 2px 6px -2px rgba(20,20,20,.06); --lift: 0 24px 48px -26px rgba(20,20,20,.38); }
+[data-theme="dark"] { --soft: #1a1a1d; --float: 0 10px 24px -14px rgba(0,0,0,.6); --lift: 0 24px 48px -26px rgba(0,0,0,.7); }
+html, body, button, input, select, textarea { font-family: var(--font-sans), ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+body { font-size: 14px; letter-spacing: -0.005em; }
+h1, h2, h3, .hero2 h1, .qe-title { font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif; }
+h1 { font-weight: 800; letter-spacing: -0.03em; } h2 { font-weight: 700; letter-spacing: -0.01em; }
+.hero2 h1 { font-size: clamp(30px, 2.6vw, 44px); font-weight: 800; line-height: 1.08; letter-spacing: -0.035em; }
+.hero2 p { font-size: 14px; line-height: 1.55; }
+.card h2, .card-h h2 { font-size: 16px; font-weight: 700; }
+
+/* Section panels: soft, roomy, rounded */
+.frame .card, .frame .stat, .frame .coll { background: var(--soft); border-radius: 26px; }
+.dash .bento .card { padding: 18px 18px; }
+.dash .card-h { background: var(--soft); }
+
+/* Items inside panels: white "floating" cards */
+.bento .card .row, .feed li, .wk-box, .checklist li, .quick a { background: var(--card); border: 0; border-radius: 16px; box-shadow: var(--float); }
+.bento .card .row { padding: 12px 14px; margin-top: 10px; } .feed li { padding: 10px 14px; margin-top: 10px; }
+.bento .card .row b { font-weight: 700; font-size: 13.5px; } .bento .card .row small, .feed-t small { font-size: 11.5px; }
+.wk-box { border-left: 0; position: relative; padding-left: 16px; } .wk-box::before { content: ""; position: absolute; left: 7px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: #f26f2c; }
+.week-item { margin-top: 10px; }
+
+
+/* Rings, website card, promo */
+.ring-card, .site-card { background: var(--card) !important; box-shadow: var(--float); }
+.promo { border-radius: 26px; } .promo h3 { font-weight: 800; letter-spacing: -0.02em; }
+
+/* Top bar controls: soft pills */
+.icon-btn.wide, .sw, .theme-seg { background: var(--soft); border-color: transparent; border-radius: 12px; }
+.btn { border-radius: 12px; font-weight: 600; } .btn.dark { border-radius: 12px; }
+.kpi { background: var(--card); box-shadow: var(--float); }
+
+/* Tables and lists elsewhere: same soft-panel + white rows feel */
+.frame .tbl { background: var(--card); border: 0; box-shadow: var(--float); border-radius: 22px; }
+.badge { font-weight: 700; font-size: 11.5px; }
+/* v9 tune-ups */
+body { letter-spacing: 0; } .bento .card .row small, .feed-t small, .kpi, .hero2 p { letter-spacing: 0; }
+.hero2 { grid-template-columns: minmax(380px, 1fr) minmax(0, 1.45fr); }
+.hero2 h1 { font-size: clamp(28px, 2.35vw, 40px); }
+.ring-card, .site-card { background: var(--soft) !important; box-shadow: none; }
+.dash .stack { gap: 14px; } .dash .site-card { padding: 14px 18px; } .dash .site-card .card-h { margin-bottom: 2px; }
+.dash .site-card p { margin: 0 0 8px !important; }
+body { word-spacing: .04em; } .hero2 h1 { word-spacing: .02em; }
+

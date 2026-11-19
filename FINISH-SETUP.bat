@@ -8,7 +8,7 @@ echo  1/2  Upload the CMS code to GitHub (Vercel redeploys it)
 echo ============================================================
 cd /d "%CMS%"
 git add -A
-git commit -m "One address = one website, Framer-style page sync, connection check"
+git commit -m "CMS update"
 git push
 echo.
 echo ============================================================

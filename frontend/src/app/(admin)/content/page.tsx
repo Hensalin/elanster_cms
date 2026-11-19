@@ -24,7 +24,7 @@ function ContentScreen() {
   const loadSeq = useRef(0); const [syncing, setSyncing] = useState(false); const autoSynced = useRef<Set<string>>(new Set());
   const [sites, setSites] = useState<any[]>([]);
   useEffect(() => { api<any[]>("/api/v1/admin/websites").then(setSites).catch(() => {}); }, []);
-  const syncTarget = () => (site ? sites.find((x) => x.id === site) : sites.find((x) => x.active && x.domain)) ?? null;
+  const syncTarget = () => (site ? sites.find((x) => x.id === site) : sites.filter((x) => x.active && x.domain).length === 1 ? sites.find((x) => x.active && x.domain) : null) ?? null;
   /** Framer-style: read the live website and bring in all its pages. */
   const syncPages = async (quiet = false) => {
     const t = syncTarget(); if (!t) { if (!quiet) toast("Choose a website (top left) that has an address", true); return; }
@@ -57,7 +57,7 @@ function ContentScreen() {
   useEffect(() => { setRows(null); const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load]); // eslint-disable-line
   useEffect(() => { setSel(new Set()); setPage(1); }, [kind, site, q, status]);
   useEffect(() => {
-    const t = syncTarget(); if (!rows || !t || autoSynced.current.has(t.id)) return;
+    const t = syncTarget(); if (!site || !rows || !t?.domain || !t.active || autoSynced.current.has(t.id)) return;   // "All websites": nothing is read automatically
     autoSynced.current.add(t.id); syncPages(true);
   }, [kind, rows, sites, site]); // eslint-disable-line
   // Links like /content?open=blogs:ID (from the Ctrl+K search) or /content?new=1
@@ -126,11 +126,11 @@ function ContentScreen() {
               <button className="btn orange" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button></div>}
             {!q && !status && kind === "pages" && <button className="btn orange" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Bring in pages from website"}</button>}</div>
             : <table><thead><tr><th style={{ width: 34 }}><input type="checkbox" aria-label="Select all" checked={all} onChange={() => setSel(all ? new Set() : new Set(shown.map((r) => r.id)))} /></th>
-              {th("title", "Title")}{th("status", "Status")}{th("slug", "Slug")}{kind === "blogs" ? th("category", "Category") : th("website", "Website")}{kind === "blogs" ? th("author", "Author") : <th>Edits</th>}{th("updatedAt", "Updated")}<th><span className="sr-only">Quick actions</span></th></tr></thead>
+              {th("title", "Title")}{th("status", "Status")}{!site && kind === "blogs" ? th("website", "Website") : th("slug", "Slug")}{kind === "blogs" ? th("category", "Category") : th("website", "Website")}{kind === "blogs" ? th("author", "Author") : <th>Edits</th>}{th("updatedAt", "Updated")}<th><span className="sr-only">Quick actions</span></th></tr></thead>
               <tbody>{shown.map((r) => (<tr key={r.id} className={(open?.id === r.id ? "on " : "") + (sel.has(r.id) ? "picked" : "")} onClick={() => openRow(r)}>
                 <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.title}`} checked={sel.has(r.id)} onChange={() => toggle(r.id)} /></td>
                 <td><div className="title-cell">{kind === "blogs" && (r.img ? <img className="thumb" src={r.img} alt="" loading="lazy" /> : <span className="thumb thumb--none" aria-hidden><ImageIcon size={15} /></span>)}<button className="row-title" onClick={(e) => { e.stopPropagation(); openRow(r); }}>{r.title}</button></div></td>
-                <td><Chip r={r} /></td><td><div className="slug-cell" title={"/" + r.slug.replace(/^\//, "")}>/{r.slug.replace(/^\//, "")}</div></td>
+                <td><Chip r={r} /></td>{!site && kind === "blogs" ? <td className="mut">{r.website}</td> : <td><div className="slug-cell" title={"/" + r.slug.replace(/^\//, "")}>/{r.slug.replace(/^\//, "")}</div></td>}
                 <td>{kind === "blogs" ? (r.category || <span className="mut">—</span>) : r.website}</td><td>{kind === "blogs" ? (r.author || <span className="mut">—</span>) : <span className="mut">{r.note || "—"}</span>}</td>
                 <td className="mut nowrap">{fmt(r.updatedAt)}</td>
                 <td className="row-act" onClick={(e) => e.stopPropagation()}>{r.status === "PUBLISHED" && !r.edited

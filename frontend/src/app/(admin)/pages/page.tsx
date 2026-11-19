@@ -7,27 +7,30 @@ export default function Pages() {
   const [sites, setSites] = useState<any[]>([]); const [site, setSite] = useState("");
   const [rows, setRows] = useState<any[] | null>(null);
   const { toast, el } = useToast(); const file = useRef<HTMLInputElement>(null);
-  const [done, setDone] = useState(false); const [checks, setChecks] = useState<any[] | null>(null); const [open, setOpen] = useState(false); const [addr, setAddr] = useState("https://websiteelanster.vercel.app"); const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false); const [checks, setChecks] = useState<any[] | null>(null); const [open, setOpen] = useState(false); const [addr, setAddr] = useState(""); const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try { setRows(await api("/api/v1/admin/pages" + (site ? "?website=" + site : ""))); } catch (e) { toast((e as Error).message, true); }
   }, [site]); // eslint-disable-line
   useEffect(() => { api("/api/v1/admin/websites").then((s) => { setSites(s); }); }, []);
   useEffect(() => { load(); }, [load]);
+  // The wizard works on the chosen website; its address is filled in from what the CMS already knows.
+  useEffect(() => { const t = sites.find((x) => x.id === site) ?? (sites.length === 1 ? sites[0] : null); setAddr(t?.domain ?? ""); }, [site, sites]);
   const connect = async () => {
-    const target = site || sites[0]?.id; if (!target) return toast("Add a website first", true);
+    const target = site || (sites.length === 1 ? sites[0].id : ""); if (!target) return toast("Choose the website first (in the wizard)", true);
     setBusy(true);
     try {
-      await api(`/api/v1/admin/websites/${target}`, { method: "PUT", body: { domain: addr.trim().replace(/\/$/, "") } });
-      const r = await api(`/api/v1/admin/websites/${target}/import-pages`, { method: "POST" });
-      toast(`Connected. ${r.created} page(s) imported, ${r.updated} refreshed`); setDone(true); load();
+      // Saving the address reads the website and brings in its pages straight away.
+      const w = await api(`/api/v1/admin/websites/${target}`, { method: "PUT", body: { domain: addr.trim() } });
+      if (w.sync?.error) throw new Error(w.sync.error);
+      toast(`Connected. ${w.sync?.pages?.length ?? 0} page(s) found on the website`); setDone(true); load();
     } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const check = async () => {
-    const target = site || sites[0]?.id; if (!target) return;
+    const target = site || (sites.length === 1 ? sites[0].id : ""); if (!target) return toast("Choose a website first", true);
     setChecks([]); try { setChecks(await api(`/api/v1/admin/websites/${target}/check`)); } catch (e) { setChecks(null); toast((e as Error).message, true); }
   };
   const download = async () => {
-    const target = site || sites[0]?.id;
+    const target = site || (sites.length === 1 ? sites[0].id : ""); if (!target) return toast("Choose a website first", true);
     try {
       const r = await api(`/api/v1/admin/websites/${target}/connection-file`, { method: "POST" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([r.content], { type: "text/javascript" })); a.download = r.filename; a.click();
@@ -35,7 +38,7 @@ export default function Pages() {
     } catch (e) { toast((e as Error).message, true); }
   };
   const importFile = async (f: File) => {
-    const target = site || sites[0]?.id;
+    const target = site || (sites.length === 1 ? sites[0].id : ""); if (!target) return toast("Choose a website first", true);
     if (!target) return toast("Add a website first", true);
     try {
       const r = await api(`/api/v1/admin/websites/${target}/import-pages`, { method: "POST", body: JSON.parse(await f.text()) });
@@ -62,8 +65,9 @@ export default function Pages() {
       <h2>Connect your website</h2>
       {!done ? <>
         <p style={{ color: "var(--muted)" }}>Step 1 of 2. Enter your live website address. The CMS shows it in the editor and brings in every page&apos;s text. Your design is not changed.</p>
+        {sites.length > 1 && <div className="field"><label htmlFor="wsel">Website in the CMS</label><select id="wsel" value={site} onChange={(e) => setSite(e.target.value)}><option value="">Choose…</option>{sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>}
         <div className="field"><label htmlFor="addr">Website address</label><input id="addr" type="text" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="https://www.example.com" /></div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn orange" disabled={busy || !addr.trim()} onClick={connect}>{busy ? "Connecting…" : "Connect & import pages"}</button></div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn orange" disabled={busy || !addr.trim() || (sites.length > 1 && !site)} onClick={connect}>{busy ? "Connecting…" : "Connect & import pages"}</button></div>
       </> : <>
         <p style={{ color: "var(--muted)" }}>Step 2 of 2. Make your live website read from this CMS, so everything you <b>Publish</b> appears on it:</p>
         <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>

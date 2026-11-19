@@ -3,14 +3,16 @@ import { db, schema } from "@/db";
 import { canPublish, websiteRole } from "@/lib/auth";
 import { admin, fail, json } from "@/lib/http";
 import { manifestSchema, readContent, writeContent } from "@/lib/pagecontent";
-import bundled from "@/data/elanster-manifest.json";
+import { syncPages } from "@/lib/sitescan";
 
 /** Import (or refresh) the editable text of a website's pages from the site scan file. Safe to repeat: edits are kept. */
 export const POST = admin<{ params: Promise<{ id: string }> }>(async (req, { params }, user) => {
   const { id } = await params;
   if (!canPublish(await websiteRole(user, id))) return fail("Only a Website Admin can import pages", 403);
   const text = await req.text();
-  const m = manifestSchema.parse(text.trim() ? JSON.parse(text) : bundled); // empty request = the Elanster site scan that ships with the CMS
+  // No file sent: read the website's own pages from its address (never another website's pages).
+  if (!text.trim()) { try { const r = await syncPages(id, user.id); return json({ created: r.created, updated: r.updated, removed: r.removed, pages: r.pages.length }); } catch (e) { return fail((e as Error).message, 422); } }
+  const m = manifestSchema.parse(JSON.parse(text));
   const list = [...m.pages, ...(m.global ? [m.global] : [])];
   let created = 0, updated = 0;
   for (const p of list) {

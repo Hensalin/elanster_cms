@@ -11,7 +11,8 @@ const security = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 const nextConfig: NextConfig = {
-  cacheComponents: true,
+  // The admin screens are all client-side, so Next.js "instant navigation" checks only add dev warnings.
+  cacheComponents: false,
   devIndicators: false,
   async rewrites() { return [{ source: "/api/:path*", destination: `${BACKEND}/api/:path*` }, { source: "/preview/:path*", destination: `${BACKEND}/preview/:path*` }]; },
   async headers() { return [{ source: "/((?!api/).*)", headers: security }]; },

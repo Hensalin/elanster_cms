@@ -56,9 +56,19 @@ export const canPublish = (r: string | null) => r === "SUPER_ADMIN" || r === "WE
 export const canEdit = (r: string | null) => r !== null;
 
 /** Websites this user may see. */
+/** The websites this person may see, never including removed websites. Super Admins: every website that still exists.
+ *  (Still typed with "all" for older callers; it is no longer returned, so removed websites' content never shows up.) */
 export async function accessibleWebsiteIds(user: SessionUser): Promise<string[] | "all"> {
-  if (user.role === "SUPER_ADMIN") return "all";
+  if (user.role === "SUPER_ADMIN")
+    return (await db.select({ id: schema.websites.id }).from(schema.websites).where(isNull(schema.websites.deletedAt))).map((r) => r.id);
   const rows = await db.select({ id: schema.websiteUsers.websiteId }).from(schema.websiteUsers)
-    .where(eq(schema.websiteUsers.userId, user.id));
+    .innerJoin(schema.websites, eq(schema.websites.id, schema.websiteUsers.websiteId))
+    .where(and(eq(schema.websiteUsers.userId, user.id), isNull(schema.websites.deletedAt)));
   return rows.map((r) => r.id);
+}
+
+/** Narrows the list to one website when the screen asks for it (?website=ID) and the person may see it. */
+export function focusIds(ids: string[] | "all", req: Request): string[] {
+  const list = ids === "all" ? [] : ids; const w = new URL(req.url).searchParams.get("website");
+  return w ? (list.includes(w) ? [w] : ["-"]) : list.length ? list : ["-"];
 }

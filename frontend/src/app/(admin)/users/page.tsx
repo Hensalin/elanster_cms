@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Trash2, UserX } from "lucide-react";
+import { Check, Trash2, UserX, X } from "lucide-react";
 import { api, fmt, useToast } from "@/components/ui";
 
 type P = { id: string; name: string; email: string; role: string; active: boolean; createdAt: string; sites: { websiteId: string; role: string }[] };
@@ -32,14 +32,23 @@ export default function Users() {
 function Manage({ p, sites, onClose, onSave }: { p: P; sites: W[]; onClose: () => void; onSave: (id: string, b: object, m: string) => void }) {
   const [role, setRole] = useState(p.role); const [active, setActive] = useState(p.active || p.sites.length > 0 ? p.active : true);
   const [sel, setSel] = useState<Record<string, string>>(Object.fromEntries(p.sites.map((s) => [s.websiteId, s.role])));
+  const [temp, setTemp] = useState(""); const [err, setErr] = useState("");
+  const resetPw = async () => { if (!confirm(`Give ${p.name} a new temporary password? Their old password stops working.`)) return;
+    try { setTemp((await api<{ password: string }>(`/api/v1/admin/people/${p.id}/reset-password`, { method: "POST" })).password); } catch (e) { setErr((e as Error).message); } };
+  const noSite = role !== "SUPER_ADMIN" && active && Object.keys(sel).length === 0;
   return (<><div className="so-dim" onClick={onClose} /><aside className="slide" style={{ width: "min(480px,94vw)" }} role="dialog" aria-label={`Manage ${p.name}`}>
-    <div className="slide-head"><b>{p.name}</b><button className="icon-btn" onClick={onClose} aria-label="Close"><UserX size={15} /></button></div>
+    <div className="slide-head"><b>{p.name}</b><button className="icon-btn" onClick={onClose} aria-label="Close"><X size={15} /></button></div>
     <div style={{ padding: 20, overflow: "auto", display: "grid", gap: 16 }}>
       <div className="mut">{p.email}</div>
       <div className="field"><label htmlFor="r">Role</label><select id="r" value={role} onChange={(e) => setRole(e.target.value)}><option value="EDITOR">Editor — writes, sends for review</option><option value="WEBSITE_ADMIN">Website Admin — can publish</option><option value="SUPER_ADMIN">Super Admin — everything</option></select></div>
       {role !== "SUPER_ADMIN" && <fieldset style={{ border: 0, padding: 0 }}><legend><b>Websites this person can use</b></legend>
         {sites.map((w) => <div key={w.id} className="row"><label><input type="checkbox" checked={w.id in sel} onChange={(e) => setSel((s) => { const n = { ...s }; if (e.target.checked) n[w.id] = role === "WEBSITE_ADMIN" ? "WEBSITE_ADMIN" : "EDITOR"; else delete n[w.id]; return n; })} /> {w.name}</label></div>)}</fieldset>}
       <label><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Account is active (can sign in)</label>
-      <button className="btn dark" onClick={() => onSave(p.id, { role, active, sites: role === "SUPER_ADMIN" ? [] : Object.entries(sel).map(([websiteId, r]) => ({ websiteId, role: role === "WEBSITE_ADMIN" ? "WEBSITE_ADMIN" : r === "WEBSITE_ADMIN" ? "WEBSITE_ADMIN" : "EDITOR" })) }, "Saved")}>Save</button>
+      {noSite && <p className="err-text">Tick at least one website, or this person will sign in to an empty CMS.</p>}
+      <hr className="sep" />
+      <div><b>Password</b><p className="mut" style={{ margin: "4px 0 8px", fontSize: 13 }}>Forgot their password? Give them a temporary one. They change it under My account after signing in.</p>
+        {temp ? <><div className="keybox">{temp}</div><small className="mut">Shown only once. Send it to {p.name} privately.</small></> : <button className="btn sm" onClick={resetPw}>Give a temporary password</button>}
+        {err && <p className="err-text">{err}</p>}</div>
+      <button className="btn dark" disabled={noSite} onClick={() => onSave(p.id, { role, active, sites: role === "SUPER_ADMIN" ? [] : Object.entries(sel).map(([websiteId, r]) => ({ websiteId, role: role === "WEBSITE_ADMIN" ? "WEBSITE_ADMIN" : r === "WEBSITE_ADMIN" ? "WEBSITE_ADMIN" : "EDITOR" })) }, "Saved")}>Save</button>
     </div></aside></>);
 }

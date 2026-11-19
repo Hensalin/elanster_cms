@@ -1,4 +1,5 @@
 "use client";
+import { LogoMark } from "@/components/Logo";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,7 +17,7 @@ export default function Login() {
   return (
     <div className="auth">
       <form onSubmit={submit}>
-        <div className="brand" style={{ padding: 0, marginBottom: 18 }}><i>E</i> Elanster CMS</div>
+        <div className="brand" style={{ padding: 0, marginBottom: 18 }}><LogoMark size={32} /> Elanster CMS</div>
         <h1 style={{ fontSize: 24 }}>Sign in</h1>
         <p style={{ color: "var(--muted)", marginTop: 4 }}>Manage content for all your websites.</p>
         <div className="field"><label htmlFor="e">Email</label><input id="e" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></div>

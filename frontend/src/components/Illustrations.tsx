@@ -5,10 +5,10 @@ export function HeroArt({ className = "" }: { className?: string }) {
     <svg className={className} viewBox="0 0 360 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
       <defs>
         <linearGradient id="ha-g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ff9a5c" /><stop offset="1" stopColor="#f26f2c" /></linearGradient>
-        <linearGradient id="ha-g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9abff5" /><stop offset="1" stopColor="#6d9be6" /></linearGradient>
+        <linearGradient id="ha-g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffb48a" /><stop offset="1" stopColor="#1a1a1a" /></linearGradient>
       </defs>
       <circle cx="250" cy="110" r="96" fill="#f26f2c" opacity=".08" />
-      <circle cx="300" cy="40" r="28" fill="#9abff5" opacity=".25" />
+      <circle cx="300" cy="40" r="28" fill="#ffb48a" opacity=".25" />
       {/* browser window */}
       <g className="ha-float">
         <rect x="70" y="34" width="210" height="150" rx="14" fill="var(--card)" stroke="var(--line-2)" />
@@ -26,7 +26,7 @@ export function HeroArt({ className = "" }: { className?: string }) {
         <path d="M190 120l16-16 12 10 12-12 26 18z" fill="#fff" opacity=".55" />
         <rect x="182" y="136" width="74" height="7" rx="3.5" fill="var(--ink)" opacity=".75" />
         <rect x="182" y="149" width="48" height="6" rx="3" fill="var(--muted)" opacity=".45" />
-        <rect x="86" y="164" width="40" height="10" rx="5" fill="#e2f8ac" />
+        <rect x="86" y="164" width="40" height="10" rx="5" fill="#ffd9c2" />
         <rect x="182" y="164" width="40" height="10" rx="5" fill="#fde4d6" />
       </g>
       {/* pencil */}
@@ -43,9 +43,9 @@ export function HeroArt({ className = "" }: { className?: string }) {
       </g>
       {/* sparkles */}
       <path d="M44 70l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#f26f2c" className="ha-tw" />
-      <path d="M318 196l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#6d9be6" className="ha-tw ha-tw2" />
+      <path d="M318 196l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#1a1a1a" className="ha-tw ha-tw2" />
       <circle cx="330" cy="92" r="3" fill="#f26f2c" opacity=".6" />
-      <circle cx="40" cy="130" r="3" fill="#6d9be6" opacity=".6" />
+      <circle cx="40" cy="130" r="3" fill="#1a1a1a" opacity=".6" />
     </svg>
   );
 }
@@ -97,15 +97,15 @@ export function WriteArt() {
 export function PagesArt() {
   return (
     <svg viewBox="0 0 120 96" fill="none" aria-hidden className="feat-art">
-      <circle cx="60" cy="48" r="40" fill="#eef3ff" />
+      <circle cx="60" cy="48" r="40" fill="#f3f1ef" />
       <rect x="18" y="22" width="78" height="56" rx="7" fill="var(--card)" {...S} />
       <path d="M18 34h78" {...S} />
       <circle cx="26" cy="28" r="1.8" fill="var(--ink)" /><circle cx="32" cy="28" r="1.8" fill="var(--ink)" /><circle cx="38" cy="28" r="1.8" fill="var(--ink)" />
-      <rect x="26" y="42" width="28" height="20" rx="4" fill="#9abff5" {...S} />
+      <rect x="26" y="42" width="28" height="20" rx="4" fill="#ffb48a" {...S} />
       <path d="M62 44h26M62 52h20M62 60h24" {...S} strokeOpacity=".55" />
       <rect x="26" y="66" width="22" height="5" rx="2.5" fill="#f26f2c" />
       <g transform="translate(84 54)"><path d="M0 0l16 6-7 3-3 7z" fill="var(--card)" {...S} /></g>
-      <path d="M104 22l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#6d9be6" />
+      <path d="M104 22l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#1a1a1a" />
     </svg>
   );
 }
@@ -133,7 +133,7 @@ export function PromoArt() {
       <rect x="94" y="62" width="16" height="12" rx="3" fill="#f26f2c" {...W} />
       <path d="M99 62v-5M105 62v-5" {...W} />
       <path d="M108 20l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5z" fill="#ffd166" />
-      <circle cx="22" cy="24" r="3" fill="#9abff5" /><circle cx="120" cy="84" r="2.5" fill="#e2f8ac" />
+      <circle cx="22" cy="24" r="3" fill="#ffb48a" /><circle cx="120" cy="84" r="2.5" fill="#ffd9c2" />
     </svg>
   );
 }

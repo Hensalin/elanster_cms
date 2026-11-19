@@ -1,13 +1,13 @@
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { accessibleWebsiteIds } from "@/lib/auth";
+import { accessibleWebsiteIds, focusIds } from "@/lib/auth";
 import { admin, json } from "@/lib/http";
 
 /** Dashboard numbers. All queries run at the same time (one round trip instead of many). */
-export const GET = admin(async (_req, _c, user) => {
-  const ids = await accessibleWebsiteIds(user);
-  const sites = ids === "all" ? [] : ids.length ? ids : ["-"];
-  const siteFilter = (col: Parameters<typeof inArray>[0]) => (ids === "all" ? undefined : inArray(col, sites));
+export const GET = admin(async (req, _c, user) => {
+  // Every number is limited to the websites this person can see, or to the one chosen at the top (?website=ID).
+  const sites = focusIds(await accessibleWebsiteIds(user), req); const focused = new URL(req.url).searchParams.has("website");
+  const siteFilter = (col: Parameters<typeof inArray>[0]) => inArray(col, sites);
   const blogWhere = (...extra: (ReturnType<typeof eq> | undefined)[]) => and(isNull(schema.blogs.deletedAt), siteFilter(schema.blogs.websiteId), ...extra);
   const lite = { content: false } as const; const withSite = { website: { columns: { name: true } } } as const;
   const isSuper = user.role === "SUPER_ADMIN";
@@ -18,7 +18,7 @@ export const GET = admin(async (_req, _c, user) => {
     db.select({ n: count() }).from(schema.pages).where(and(isNull(schema.pages.deletedAt), siteFilter(schema.pages.websiteId))),
     db.query.blogs.findMany({ where: blogWhere(), orderBy: desc(schema.blogs.updatedAt), limit: 5, columns: lite, with: withSite }),
     db.query.blogs.findMany({ where: blogWhere(eq(schema.blogs.status, "PUBLISHED")), orderBy: desc(schema.blogs.publishedAt), limit: 5, columns: lite, with: withSite }),
-    db.query.activityLogs.findMany({ where: ids === "all" ? undefined : inArray(schema.activityLogs.websiteId, sites), orderBy: desc(schema.activityLogs.createdAt), limit: 8, with: { user: { columns: { name: true } } } }),
+    db.query.activityLogs.findMany({ where: user.role === "SUPER_ADMIN" && !focused ? or(isNull(schema.activityLogs.websiteId), inArray(schema.activityLogs.websiteId, sites)) : inArray(schema.activityLogs.websiteId, sites), orderBy: desc(schema.activityLogs.createdAt), limit: 8, with: { user: { columns: { name: true } } } }),
     isSuper ? Promise.resolve([{ n: 1 }]) : db.select({ n: count() }).from(schema.websiteUsers).where(and(eq(schema.websiteUsers.userId, user.id), eq(schema.websiteUsers.role, "WEBSITE_ADMIN"))),
     db.query.blogs.findMany({ where: blogWhere(eq(schema.blogs.status, "IN_REVIEW")), orderBy: desc(schema.blogs.updatedAt), limit: 8, columns: lite, with: { ...withSite, author: { columns: { name: true } } } }),
     db.query.blogs.findMany({ where: blogWhere(eq(schema.blogs.authorId, user.id), inArray(schema.blogs.status, ["DRAFT", "IN_REVIEW"])), orderBy: desc(schema.blogs.updatedAt), limit: 16, columns: lite, with: withSite }),

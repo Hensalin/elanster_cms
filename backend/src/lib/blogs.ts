@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { slugify } from "./http";
@@ -23,6 +23,24 @@ export const blogInput = z.object({
   ogImageId: z.string().nullable().optional(),
 });
 export type BlogInput = z.infer<typeof blogInput>;
+
+/** Checks that the category, pictures and author an article points to really exist (and belong to its website).
+ *  Returns a readable problem, or null. Empty values and the text "null" are treated as "none". */
+export async function checkBlogRefs(d: BlogInput, websiteId: string): Promise<string | null> {
+  const none = (v?: string | null) => !v || v === "null" || v === "undefined";
+  for (const k of ["categoryId", "featuredImageId", "ogImageId", "authorId"] as const) if (none(d[k])) d[k] = null;
+  if (d.categoryId) {
+    const [c] = await db.select({ w: schema.categories.websiteId }).from(schema.categories).where(eq(schema.categories.id, d.categoryId));
+    if (!c || c.w !== websiteId) return "That category does not exist on this website. Pick another one.";
+  }
+  for (const k of ["featuredImageId", "ogImageId"] as const) {
+    const id = d[k]; if (!id) continue;
+    const [m] = await db.select({ id: schema.media.id }).from(schema.media).where(and(eq(schema.media.id, id), isNull(schema.media.deletedAt)));
+    if (!m) return "That picture no longer exists. Choose or upload it again.";
+  }
+  if (d.authorId) { const [u] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, d.authorId)); if (!u) return "That author does not exist."; }
+  return null;
+}
 
 /** Make a slug that is unique inside one website. */
 export async function uniqueBlogSlug(websiteId: string, wanted: string, ignoreId?: string) {

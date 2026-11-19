@@ -2,6 +2,7 @@ import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { manifestSchema, readContent, writeContent, type PageField } from "./pagecontent";
+import { cleanHtml } from "./sanitize";
 
 type Manifest = z.infer<typeof manifestSchema>;
 type ScanPage = Manifest["pages"][number];
@@ -51,7 +52,7 @@ function readPage(path: string, html: string) {
   return { page: { slug, title: slug === "home" ? "Home" : name, file: path === "/" ? "index.html" : path.replace(/^\//, ""), fields } as ScanPage, global, tagged: seen.size };
 }
 
-type FoundPost = { slug: string; title: string; excerpt: string; category?: { name: string; slug: string }; image?: string; alt?: string; date?: string };
+type FoundPost = { slug: string; title: string; excerpt: string; category?: { name: string; slug: string }; image?: string; alt?: string; date?: string; url?: string; content?: string };
 const COLORS: Record<string, string> = { "ai-strategy": "orange", "ai-economics": "blue", "ai-engineering": "lime" };
 
 /** Finds the blog articles a website already shows: schema.org BlogPosting data, or the article list in its blog script. */
@@ -64,8 +65,11 @@ export async function findPosts(base: string, htmls: string[]): Promise<FoundPos
       const walk = (n: unknown): void => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) { n.forEach(walk); return; }
         const o = n as Record<string, any>; const t = ([] as string[]).concat(o["@type"] ?? []);
         if (t.some((x) => /BlogPosting|Article|NewsArticle/.test(x)) && o.headline) {
-          const url = String(o.url ?? o["@id"] ?? ""); const slug = url.match(/[?&]slug=([^&#]+)/)?.[1] ?? slugify(String(o.headline));
-          posts.set(slug, { slug, title: String(o.headline), excerpt: String(o.description ?? ""), image: typeof o.image === "string" ? o.image : o.image?.url, date: o.datePublished });
+          const url = String(o.url ?? o["@id"] ?? "").replace(/#.*$/, "");
+          // Address of the article: ?slug=… (script-built pages) or the file name (static pages like /blogs/my-post.html).
+          const slug = url.match(/[?&]slug=([^&#]+)/)?.[1] ?? url.match(/\/([a-z0-9][a-z0-9_-]*)\.html?$/i)?.[1]?.toLowerCase() ?? slugify(String(o.headline));
+          posts.set(slug, { slug, title: String(o.headline), excerpt: String(o.description ?? ""), image: typeof o.image === "string" ? o.image : o.image?.url, date: o.datePublished,
+            url: /\.html?$/i.test(url) ? url : undefined });
         }
         Object.values(o).forEach(walk); };
       walk(JSON.parse(m[1]));
@@ -88,7 +92,18 @@ export async function findPosts(base: string, htmls: string[]): Promise<FoundPos
         alt: prev.alt || fromJs.alt, category: prev.category || fromJs.category, date: prev.date } : fromJs);
     }
   }
-  return [...posts.values()].slice(0, 50);
+  // Static article pages (one HTML file per article): read their text, summary and picture too.
+  const host = new URL(base).host; const list = [...posts.values()].slice(0, 50);
+  await Promise.all(list.map(async (p) => {
+    if (!p.url) return;
+    let u: URL; try { u = new URL(p.url, base + "/"); } catch { return; }
+    const page = await get(u.host === host ? u.toString() : base + u.pathname); if (!page) return;
+    const art = page.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1];
+    if (art) p.content = art.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").trim();
+    p.excerpt ||= decode(page.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/i)?.[1] ?? "");
+    p.image ||= page.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)?.[1];
+  }));
+  return list;
 }
 
 /** Adds articles the website already shows but the CMS does not have yet (as live articles, with their photo). */
@@ -97,7 +112,7 @@ export async function importPosts(websiteId: string, base: string, htmls: string
   for (const p of found) { try {
     const [ex] = await db.select().from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), eq(schema.blogs.slug, p.slug)));
     // Already in the CMS: the CMS copy wins; only empty details (category, photo, summary) are filled in.
-    if (ex && ex.categoryId && ex.featuredImageId && ex.excerpt) continue;
+    if (ex && ex.categoryId && ex.featuredImageId && ex.excerpt && (ex.content || !p.content)) continue;
     let categoryId: string | null = null;
     if (p.category && !ex?.categoryId) {
       const [c] = await db.select().from(schema.categories).where(and(eq(schema.categories.websiteId, websiteId), eq(schema.categories.slug, p.category.slug)));
@@ -116,11 +131,13 @@ export async function importPosts(websiteId: string, base: string, htmls: string
       } catch (e) { problems.push(`photo for “${p.title.slice(0, 40)}”: ${(e as Error).message}`); }
     }
     if (ex) {
-      await db.update(schema.blogs).set({ categoryId: ex.categoryId ?? categoryId, featuredImageId: ex.featuredImageId ?? featuredImageId, excerpt: ex.excerpt || p.excerpt }).where(eq(schema.blogs.id, ex.id));
-      filled++; continue;
+      const patch = { categoryId: ex.categoryId ?? categoryId, featuredImageId: ex.featuredImageId ?? featuredImageId, excerpt: ex.excerpt || p.excerpt, content: ex.content || (p.content ? cleanHtml(p.content) : "") };
+      if (patch.categoryId !== ex.categoryId || patch.featuredImageId !== ex.featuredImageId || patch.excerpt !== ex.excerpt || patch.content !== ex.content) {
+        await db.update(schema.blogs).set(patch).where(eq(schema.blogs.id, ex.id)); filled++; }
+      continue;
     }
     const when = p.date && !isNaN(+new Date(p.date)) ? new Date(p.date) : new Date();
-    await db.insert(schema.blogs).values({ websiteId, title: p.title, slug: p.slug, excerpt: p.excerpt, content: "", status: "PUBLISHED", publishedAt: when,
+    await db.insert(schema.blogs).values({ websiteId, title: p.title, slug: p.slug, excerpt: p.excerpt.slice(0, 500), content: p.content ? cleanHtml(p.content) : "", status: "PUBLISHED", publishedAt: when,
       authorId: userId, categoryId, featuredImageId });
     added++;
   } catch (e) { problems.push(`“${p.title.slice(0, 40)}”: ${(e as Error).message}`); } }

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { saveVersion } from "@/lib/ratelimit";
 import { canEdit, canPublish, websiteRole } from "@/lib/auth";
-import { blogColumns, blogInput, blogWithRelations, setBlogTags, uniqueBlogSlug } from "@/lib/blogs";
+import { blogColumns, blogInput, checkBlogRefs, blogWithRelations, setBlogTags, uniqueBlogSlug } from "@/lib/blogs";
 import { admin, fail, json } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -29,6 +29,7 @@ export const PUT = admin<Ctx>(async (req, { params }, user) => {
     return fail("Only a Website Admin can edit published content", 403);
   const d = blogInput.parse(await req.json());
   if (d.websiteId !== b.websiteId) return fail("An article cannot be moved to another website", 400);
+  const bad = await checkBlogRefs(d, b.websiteId); if (bad) return fail(bad, 422);
   const slug = d.slug ? await uniqueBlogSlug(b.websiteId, d.slug, b.id) : b.slug;
   if (b.title !== d.title || b.content !== d.content || b.excerpt !== d.excerpt)
     await saveVersion("blog", b.id, b.websiteId, user.id, { title: b.title, excerpt: b.excerpt, content: b.content, seoTitle: b.seoTitle, metaDescription: b.metaDescription });

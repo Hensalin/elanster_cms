@@ -26,15 +26,30 @@ export const GET = admin<{ params: Promise<{ id: string }> }>(async (_req, { par
   checks.push({ ok: home.ok, label: "Website opens", hint: home.ok ? undefined : `Could not open ${base}. Check the address is right and the site is online.` });
   if (!home.ok) return done();
 
-  const cfg = await get(base + "/js/cms-config.js");
-  const found = cfg.ok && /ELANSTER_CMS/.test(cfg.text);
-  checks.push({ ok: found, label: "Connection file found (js/cms-config.js)", hint: found ? undefined : "Add js/cms-config.js to the website (Pages → Website connection → Download connection file) and push it." });
-  if (!found) return done();
-  const url = (cfg.text.match(/url:\s*"([^"]*)"/)?.[1] ?? "").replace(/\/$/, "");
-  const slug = cfg.text.match(/site:\s*"([^"]*)"/)?.[1] ?? "";
-  const key = cfg.text.match(/key:\s*"([^"]*)"/)?.[1] ?? "";
-  checks.push({ ok: !!url && !!key, label: "Connection file is filled in", hint: url && key ? undefined : "The file needs both the CMS address (url) and a key." });
-  checks.push({ ok: slug === site.slug || slug === site.id, label: `Connection file is for this website (“${site.slug}”)`, hint: slug === site.slug ? undefined : `The file says site: "${slug || "(empty)"}". Change it to site: "${site.slug}".` });
+  // Find the connection: the one-line script (in the page or in a shared .js file) or the older js/cms-config.js file.
+  let url = "", slug = "", key = "", how = "";
+  const oneLine = (t: string) => t.match(/(https?:\/\/[^"'\s]+)\/cms\.js["'][^]{0,200}?data-key["'],?\s*=?\s*["'](ek_[a-z0-9_]+)["']/i)
+    || t.match(/src=["'](https?:\/\/[^"'\s]+)\/cms\.js["'][^>]*data-key=["'](ek_[a-z0-9_]+)["']/i);
+  let m = oneLine(home.text);
+  if (m) how = "the home page";
+  if (!m) {
+    const srcs = [...home.text.matchAll(/<script[^>]+src=["']([^"']+\.js[^"']*)["']/gi)].map((x) => x[1]).filter((u) => !/^https?:\/\//i.test(u) || u.startsWith(base)).slice(0, 15);
+    for (const s of srcs) { const f = await get(new URL(s, base + "/").href); m = f.ok ? oneLine(f.text) : null; if (m) { how = s.split("?")[0]; break; } }
+  }
+  if (m) { url = m[1].replace(/\/$/, ""); key = m[2]; slug = site.slug; }
+  else {
+    const cfg = await get(base + "/js/cms-config.js");
+    if (cfg.ok && /ELANSTER_CMS/.test(cfg.text)) {
+      how = "js/cms-config.js";
+      url = (cfg.text.match(/url:\s*"([^"]*)"/)?.[1] ?? "").replace(/\/$/, "");
+      slug = cfg.text.match(/site:\s*"([^"]*)"/)?.[1] ?? "";
+      key = cfg.text.match(/key:\s*"([^"]*)"/)?.[1] ?? "";
+    }
+  }
+  checks.push({ ok: !!how, label: how ? `CMS script found (in ${how})` : "CMS script found on the website", hint: how ? undefined : "Create a key under API keys, copy the script, paste it at the top of a .js file every page loads (or in the <head> of each page), push, and wait a minute." });
+  if (!how) return done();
+  checks.push({ ok: !!url && !!key, label: "Script has the CMS address and a key", hint: url && key ? undefined : "The script needs both the CMS address and a key." });
+  if (how === "js/cms-config.js") checks.push({ ok: slug === site.slug || slug === site.id, label: `Connection file is for this website (“${site.slug}”)`, hint: slug === site.slug ? undefined : `The file says site: "${slug || "(empty)"}". Change it to site: "${site.slug}".` });
   if (!url || !key) return done();
 
   const me = await get(url + "/api/v1/websites", { "X-API-Key": key });
