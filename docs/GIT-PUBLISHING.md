@@ -5,7 +5,11 @@ and Vercel rebuilds the website. The website then works even if the CMS is down,
 
 ## What the CMS writes (and nothing else)
 - The website's own pages (`index.html`, `work.html`, …): only the edited words, picture addresses and the Google title/description change.
-- One page per live article: `article-<address>.html`, made from the website's own `article.html`, with its Google tags.
+- Articles, in the way the website itself keeps them:
+  - **Elanster demo** (one article design filled by a script): one page per live article, `article-<address>.html`, made from `article.html`.
+  - **We Are Zion** (each article is its own file in `blogs/`): the article's own file is updated; a new article gets a new file in `blogs/`
+    in the same design. When an article is unpublished, a file the CMS made is removed and a file the website already had goes back exactly as it was.
+  - Article lists on the pages (blog page, "Latest", "Keep reading") are rebuilt newest first.
 - Pictures uploaded in the CMS: `assets/uploads/<id>.png` (or .jpg, .webp …).
 - The article list on the blog page (`blog.html`): the cards are written as real HTML, newest first, so the list works without the CMS.
 - A block between `<!-- cms:start -->` and `<!-- cms:end -->` in `sitemap.xml`.
@@ -30,4 +34,16 @@ Each publish is **one commit**. Unpublishing takes the edits out again (the file
 4. Check the commit on GitHub and wait for Vercel to say Ready.
 
 ## Test
-`docs/audit/tests/git-publish.mjs` runs 53 checks against a fake GitHub (see the file header).
+`docs/audit/tests/git-publish.mjs` runs 73 checks against a fake GitHub (see the file header).
+
+## Sync from website and Git publishing
+- Pages and article files written by Git publishing carry `<meta name="generator" content="Elanster CMS">`. Sync never reads them back
+  as pages or articles (before this, every sync brought the CMS's own `article-….html` pages in again as new "article-…" articles).
+- Sync reads a page from its untouched original (kept by the CMS) instead of the live file, so the edited words never become the "original" ones.
+- Copies made before this fix: the Git window shows how many were found and has **Remove the copies** (hidden, not erased; their files are removed from GitHub).
+
+## Speed and reliability
+- Text files go straight into the commit; only pictures are uploaded separately (in parallel).
+- If a publish happens while another one is still writing, it waits for it and then runs once more, so no change is left out.
+
+Tests: `git-publish.mjs` (73), `git-copies.mjs` (22), `git-sync.mjs` (7).

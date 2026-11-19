@@ -53,13 +53,20 @@ export type FileChange = { path: string; content: Buffer | null };   // null = d
 
 /** One commit with all the changes. Fails (without force) if the branch moved meanwhile, so nothing of anyone else is overwritten. */
 export async function commitFiles(repo: string, branch: string, base: { commit: string; tree: string }, files: FileChange[], message: string) {
-  const tree: Array<{ path: string; mode: "100644"; type: "blob"; sha: string | null }> = [];
-  for (const f of files) {
-    if (f.content === null) { tree.push({ path: f.path, mode: "100644", type: "blob", sha: null }); continue; }
+  type Item = { path: string; mode: "100644"; type: "blob"; sha?: string | null; content?: string };
+  const tree: Item[] = new Array(files.length);
+  const isText = (b: Buffer) => { const s = b.toString("utf8"); return !s.includes("\uFFFD") && !b.includes(0) ? s : null; };
+  let next = 0;
+  const worker = async () => { for (let i = next++; i < files.length; i = next++) {
+    const f = files[i];
+    if (f.content === null) { tree[i] = { path: f.path, mode: "100644", type: "blob", sha: null }; continue; }
+    const text = /\.(html?|xml|txt|css|js|json|svg)$/i.test(f.path) ? isText(f.content) : null;
+    if (text !== null) { tree[i] = { path: f.path, mode: "100644", type: "blob", content: text }; continue; }   // no extra call for text files
     const b = await call(`/repos/${repo}/git/blobs`, { method: "POST", body: JSON.stringify({ content: f.content.toString("base64"), encoding: "base64" }) });
     if (!b.ok) return fail(b, `Uploading ${f.path}`);
-    tree.push({ path: f.path, mode: "100644", type: "blob", sha: ((await b.json()) as { sha: string }).sha });
-  }
+    tree[i] = { path: f.path, mode: "100644", type: "blob", sha: ((await b.json()) as { sha: string }).sha };
+  } };
+  await Promise.all(Array.from({ length: Math.min(6, files.length) }, worker));
   const t = await call(`/repos/${repo}/git/trees`, { method: "POST", body: JSON.stringify({ base_tree: base.tree, tree }) });
   if (!t.ok) return fail(t, "Building the commit");
   const c = await call(`/repos/${repo}/git/commits`, { method: "POST", body: JSON.stringify({ message, tree: ((await t.json()) as { sha: string }).sha, parents: [base.commit] }) });

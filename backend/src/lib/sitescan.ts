@@ -81,6 +81,12 @@ function autoFields(found: { page: ScanPage; html: string }[], glob: Map<string,
 type FoundPost = { slug: string; title: string; excerpt: string; category?: { name: string; slug: string }; image?: string; alt?: string; date?: string; url?: string; content?: string };
 const COLORS: Record<string, string> = { "ai-strategy": "orange", "ai-economics": "blue", "ai-engineering": "lime" };
 
+/** Pages and article files written by Git publishing carry this tag. The sync never reads them back as pages or articles
+    (otherwise every sync would bring the CMS's own article pages in again as new "article-…" articles). */
+export const GENERATED = /<meta\s+name=["']generator["']\s+content=["']Elanster CMS["']/i;
+/** "article-article-my-post" → "my-post": the address Git publishing gives an article page, back to the article's own address. */
+export const baseSlug = (s: string) => s.replace(/^(?:article-)+/, "");
+
 /** Finds the blog articles a website already shows: schema.org BlogPosting data, or the article list in its blog script. */
 export async function findPosts(base: string, htmls: string[]): Promise<FoundPost[]> {
   const posts = new Map<string, FoundPost>();
@@ -132,10 +138,36 @@ export async function findPosts(base: string, htmls: string[]): Promise<FoundPos
   return list;
 }
 
+/** /article-<x>.html where <x> is an article of this website in the CMS: a page Git publishing made (also before the tag existed). */
+async function isOwnArticlePage(websiteId: string, path: string) {
+  const m = /^\/?article-([a-z0-9][a-z0-9-]*)\.html$/i.exec(path); if (!m) return false;
+  const [b] = await db.select({ id: schema.blogs.id }).from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), eq(schema.blogs.slug, baseSlug(m[1]))));
+  return !!b;
+}
+
+/** Copies made by the bug above: articles "article-…-<x>" and pages "article-…-<x>" while article <x> exists. Hidden (soft delete), not erased. */
+export async function findCopies(websiteId: string) {
+  const blogs = await db.select({ id: schema.blogs.id, slug: schema.blogs.slug, title: schema.blogs.title }).from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), isNull(schema.blogs.deletedAt)));
+  const real = new Set(blogs.map((b) => b.slug).filter((s) => s === baseSlug(s)));
+  const articles = blogs.filter((b) => b.slug !== baseSlug(b.slug) && real.has(baseSlug(b.slug)));
+  const pages = (await db.select({ id: schema.pages.id, slug: schema.pages.slug }).from(schema.pages).where(and(eq(schema.pages.websiteId, websiteId), isNull(schema.pages.deletedAt))))
+    .filter((p) => /^article-/.test(p.slug) && real.has(baseSlug(p.slug)));
+  return { articles, pages };
+}
+export async function removeCopies(websiteId: string) {
+  const c = await findCopies(websiteId); const now = new Date();
+  for (const b of c.articles) await db.update(schema.blogs).set({ deletedAt: now }).where(eq(schema.blogs.id, b.id));
+  for (const p of c.pages) await db.update(schema.pages).set({ deletedAt: now }).where(eq(schema.pages.id, p.id));
+  return { articles: c.articles.length, pages: c.pages.length };
+}
+
 /** Adds articles the website already shows but the CMS does not have yet (as live articles, with their photo). */
 export async function importPosts(websiteId: string, base: string, htmls: string[], userId: string | null) {
-  const found = await findPosts(base, htmls); let added = 0, filled = 0; const problems: string[] = [];
+  const found = await findPosts(base, htmls.filter((h) => !GENERATED.test(h))); let added = 0, filled = 0; const problems: string[] = [];
+  const have = new Set((await db.select({ slug: schema.blogs.slug }).from(schema.blogs).where(eq(schema.blogs.websiteId, websiteId))).map((b) => b.slug));
   for (const p of found) { try {
+    // An "article-<x>" page whose article <x> is already in the CMS is the CMS's own published page, not a new article.
+    if (p.slug !== baseSlug(p.slug) && (have.has(baseSlug(p.slug)) || found.some((q) => q.slug === baseSlug(p.slug)))) continue;
     const [ex] = await db.select().from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), eq(schema.blogs.slug, p.slug)));
     // Already in the CMS: the CMS copy wins; only empty details (category, photo, summary) are filled in.
     if (ex && ex.categoryId && ex.featuredImageId && ex.excerpt && (ex.content || !p.content)) continue;
@@ -182,8 +214,15 @@ export async function syncPages(websiteId: string, userId: string | null) {
   if (mf) { try { const p = manifestSchema.safeParse(JSON.parse(mf)); if (p.success) { manifest = p.data; source = "manifest"; } } catch { /* not JSON */ } }
   if (!manifest) {
     const pages: ScanPage[] = []; const glob = new Map<string, PageField>(); const plainPages: { page: ScanPage; html: string }[] = [];
+    // Files written by Git publishing contain the published edits; the sync must read them as they were before any CMS edit,
+    // or the edited words would become the "original" ones and later edits would no longer find their place.
+    const originals = new Map((await db.select({ path: schema.gitFiles.path, original: schema.gitFiles.original }).from(schema.gitFiles)
+      .where(and(eq(schema.gitFiles.websiteId, websiteId), eq(schema.gitFiles.kind, "page")))).filter((r) => r.original).map((r) => [r.path, r.original!]));
     for (const path of await findPages(base, home)) {
-      const html = path === "/" ? home : await get(base + path); if (!html) continue; if (path !== "/") htmls.push(html);
+      const file = path === "/" ? "index.html" : path.replace(/^\//, "");
+      const html = originals.get(file) ?? (path === "/" ? home : await get(base + path)); if (!html) continue;
+      if (GENERATED.test(html) || await isOwnArticlePage(websiteId, path)) continue;   // a page Git publishing made for an article
+      if (path !== "/") htmls.push(html);
       // Article pages inside a folder (blogs/x.html) are articles, not pages: their text comes from the CMS article.
       if (/\/[^/]+\/[^/]+$/.test(path) && /<article\b/i.test(html)) continue;
       const r = readPage(path, html); if (pages.some((p) => p.slug === r.page.slug)) continue;
@@ -210,7 +249,7 @@ export async function syncPages(websiteId: string, userId: string | null) {
     }
   }
   // Articles the website already shows come in too (only ones the CMS does not have yet).
-  if (source === "manifest") for (const p of await findPages(base, home)) { if (/blog|insight|news|article/i.test(p)) { const h = await get(base + p); if (h) htmls.push(h); } }
+  if (source === "manifest") for (const p of await findPages(base, home)) { if (/blog|insight|news|article/i.test(p) && !(await isOwnArticlePage(websiteId, p))) { const h = await get(base + p); if (h && !GENERATED.test(h)) htmls.push(h); } }
   const posts = await importPosts(websiteId, base, htmls, userId).catch((e) => ({ found: 0, added: 0, filled: 0, problems: [(e as Error).message] }));
   // Pages that are no longer on the website are hidden (they come back if the page returns).
   const removed = (await db.update(schema.pages).set({ deletedAt: new Date() })

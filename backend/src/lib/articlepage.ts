@@ -72,7 +72,7 @@ export function renderArticle(shell: string, a: Article, all: Article[], opts: {
   out = out.replace(/(<meta\b[^>]*\bname="description"[^>]*\scontent=")[^"]*(")/i, (_m, a1, a2) => `${a1}${esc(desc)}${a2}`);
   const head: string[] = [];
   if (url) head.push(`<link rel="canonical" href="${esc(a.seo.canonicalUrl || url)}">`);
-  head.push(`<meta property="og:type" content="article">`, `<meta property="og:title" content="${esc(title)}">`, `<meta property="og:description" content="${esc(desc)}">`);
+  head.push(`<meta name="generator" content="Elanster CMS">`, `<meta property="og:type" content="article">`, `<meta property="og:title" content="${esc(title)}">`, `<meta property="og:description" content="${esc(desc)}">`);
   if (url) head.push(`<meta property="og:url" content="${esc(url)}">`);
   if (ogImg) head.push(`<meta property="og:image" content="${esc(ogImg)}">`);
   head.push(`<meta name="twitter:card" content="summary_large_image">`, `<meta name="twitter:title" content="${esc(title)}">`, `<meta name="twitter:description" content="${esc(desc)}">`);

@@ -127,6 +127,13 @@ function GitPanel({ site, onClose, toast }: { site: any; onClose: () => void; to
       {g.message && <div style={{ marginTop: 4 }}>{g.message}</div>}
       {g.commit && <div className="mut" style={{ marginTop: 4, fontSize: 12 }}>Last commit {String(g.commit).slice(0, 7)}{g.at ? " · " + fmt(g.at) : ""}</div>}
     </div>}
+    {g?.copies && (g.copies.articles > 0 || g.copies.pages > 0) && <div className="tip" role="alert" style={{ marginTop: 10, borderColor: "#c2410c" }}>
+      <b>{g.copies.articles} copied article{g.copies.articles === 1 ? "" : "s"}{g.copies.pages ? ` and ${g.copies.pages} copied page${g.copies.pages === 1 ? "" : "s"}` : ""} found.</b> An older sync brought the CMS's own article pages back in as new articles (for example <code>{g.copies.examples?.[0]}</code>). The real articles are not touched.
+      <div style={{ marginTop: 8 }}><button className="btn sm dark" disabled={busy} onClick={async () => {
+        if (!confirm(`Hide ${g.copies.articles} copied article(s)${g.copies.pages ? ` and ${g.copies.pages} page(s)` : ""}? They are hidden, not erased, and their files are removed from GitHub.`)) return;
+        setBusy(true); setErr(""); try { const r = await api(`/api/v1/admin/websites/${site.id}/git`, { method: "POST", body: { action: "remove_copies" } }); setG(r); toast(`Hid ${r.removed.articles} copied article(s)${r.removed.pages ? ` and ${r.removed.pages} page(s)` : ""}`); } catch (e) { setErr((e as Error).message); } setBusy(false);
+      }}>Remove the copies</button></div>
+    </div>}
     {files.map((f) => <button key={f} className="btn sm" style={{ marginTop: 8 }} disabled={busy} onClick={() => { if (confirm(`Let the CMS write ${f} again? Changes made to this file directly in Git will be replaced.`)) publish(f); }}>Take over {f}</button>)}
     {err && <p className="err-text" role="alert">{err}</p>}
     <div style={{ display: "flex", flexWrap: "wrap", marginTop: 14, gap: 8, justifyContent: "flex-end" }}>

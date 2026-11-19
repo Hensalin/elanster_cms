@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { applyEdits } from "./htmledit";
+import { articleDir, rebuildLists, renderInFile } from "./sitearticles";
 import { articlePath, hasArticleList, mediaIds, renderArticle, renderList, validSlug, type Article } from "./articlepage";
 import { blobSha, commitFiles, getHead, GitError, hasToken, readFile, validBranch, validRepo, type FileChange } from "./github";
 import { blogWithRelations } from "./blogs";
@@ -16,7 +17,8 @@ const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "
 const MARK_A = "<!-- cms:start -->", MARK_B = "<!-- cms:end -->";
 
 /** The only files the CMS may ever write or delete in a website's repo. */
-export function allowedPath(path: string, pageFiles: Set<string>) {
+export function allowedPath(path: string, pageFiles: Set<string>, dir: string | null = null) {
+  if (dir && /^[a-z0-9_-]{1,40}$/i.test(dir) && new RegExp(`^${dir}/[a-z0-9][a-z0-9-]{0,100}\\.html$`).test(path)) return true;   // the website's article folder
   if (pageFiles.has(path)) return /^[A-Za-z0-9_\-./]+\.html$/.test(path) && !path.includes("..") && !path.startsWith("/") && !path.split("/").some((s) => s.startsWith("."));
   return /^article-[a-z0-9][a-z0-9-]{0,100}\.html$/.test(path) || /^assets\/uploads\/[A-Za-z0-9_-]{1,40}\.(jpg|png|webp|gif|avif)$/.test(path) || path === "sitemap.xml";
 }
@@ -24,10 +26,10 @@ export function allowedPath(path: string, pageFiles: Set<string>) {
 export type GitResult = { status: "OK" | "WARN" | "FAILED" | "SKIPPED"; message: string; files: number; commit?: string; warnings?: string[] };
 const sha = (s: string) => blobSha(Buffer.from(s));
 
-type Plan = { changes: FileChange[]; state: Array<{ path: string; kind: string; original: string | null; lastSha: string }>; drop: string[]; warnings: string[]; touched: string[] };
+type Plan = { changes: FileChange[]; state: Array<{ path: string; kind: string; original: string | null; lastSha: string }>; drop: string[]; warnings: string[]; touched: string[]; dir: string | null };
 
 async function plan(site: typeof schema.websites.$inferSelect, repo: string, head: { commit: string }, force: Set<string>): Promise<Plan> {
-  const P: Plan = { changes: [], state: [], drop: [], warnings: [], touched: [] };
+  const P: Plan = { changes: [], state: [], drop: [], warnings: [], touched: [], dir: null };
   const wid = site.id;
   const rows = await db.select().from(schema.gitFiles).where(eq(schema.gitFiles.websiteId, wid));
   const st = new Map(rows.map((r) => [r.path, r]));
@@ -41,14 +43,16 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
   const assets = new Map<string, string>();   // media id → path in the repo
   const needAsset = async (ids: string[]) => {
     const want = [...new Set(ids)].filter((i) => !assets.has(i)); if (!want.length) return;
-    const ms = await db.select({ id: schema.media.id, mime: schema.media.mimeType }).from(schema.media).where(and(eq(schema.media.websiteId, wid), inArray(schema.media.id, want)));
+    const ms = await db.select({ id: schema.media.id, mime: schema.media.mimeType }).from(schema.media).where(inArray(schema.media.id, want));   // a picture removed from the library but still used by a live article is still written
     for (const m of ms) { const e = EXT[m.mime]; if (e) assets.set(m.id, `assets/uploads/${m.id}.${e}`); }
   };
   const assetUrl = (id: string) => (assets.has(id) ? "/" + assets.get(id) : null);
 
   // ---- live articles (newest first): used for the list on the blog page and for the article pages
   const domain = site.domain ? site.domain.replace(/\/+$/, "") : "";
-  const siteUrl = /^https?:\/\//.test(domain) ? domain : "";
+  const smBuf = await readFile(repo, "sitemap.xml", head.commit);
+  const smBase = smBuf ? /<loc>\s*(https?:\/\/[^/<\s]+)/i.exec(smBuf.toString("utf8"))?.[1] ?? "" : "";
+  const siteUrl = smBase || (/^https?:\/\//.test(domain) ? domain : "");
   const liveBlogs = await db.select({ id: schema.blogs.id }).from(schema.blogs).where(and(eq(schema.blogs.websiteId, wid), livePublished(), notDeleted()));
   const arts: Article[] = [];
   for (const { id } of liveBlogs) { const b = await blogWithRelations(id); if (b && validSlug(b.slug)) arts.push(publicBlog(b, "", true)); }
@@ -78,35 +82,79 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
   await needAsset([...pageOut.values()].flatMap((x) => Object.values(x.values).flatMap((v) => mediaIds(v))));
   for (const [file, x] of pageOut) {
     const done = applyEdits(x.orig, x.slug, x.values, (u) => { const m = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(u); return (m && assetUrl(m[1])) || u; }, x.originals);
-    const html = hasArticleList(done.html) ? renderList(done.html, arts, assetUrl) : done.html;   // blog page: the cards are real HTML too
+    // Article lists are real HTML too: the blog page's list area (Elanster demo), or the article cards of the page (We Are Zion).
+    const html = hasArticleList(done.html) ? renderList(done.html, arts, assetUrl) : rebuildLists(done.html, arts, null, assetUrl);
     const buf = Buffer.from(html);
     P.state.push({ path: file, kind: "page", original: x.orig, lastSha: blobSha(buf) });
     if (!x.repoBuf.equals(buf)) { P.changes.push({ path: file, content: buf }); P.touched.push(file); }
   }
 
+  const wanted = new Set<string>();   // article files the CMS created (listed in the sitemap block)
+  const asset = (u: string) => { const m = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(u); return (m && assetUrl(m[1])) || u; };
   const shellFile = "article.html";
-  let shell: string | null = null;
-  if (arts.length) {
+  const shellBuf = arts.length || rows.some((r) => r.kind === "article") ? await readFile(repo, shellFile, head.commit) : null;
+  if (shellBuf && /id="articleApp"/.test(shellBuf.toString("utf8"))) {
+    // A) One article design filled by the website's script (Elanster demo): every article becomes article-<slug>.html.
     const sp = pageOut.get(shellFile);
-    if (sp) shell = applyEdits(sp.orig, sp.slug, sp.values, (u) => { const m = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(u); return (m && assetUrl(m[1])) || u; }, sp.originals).html;
-    else {   // the article design is not a CMS page itself: it still gets the shared menu and footer edits
-      const b = await readFile(repo, shellFile, head.commit);
-      shell = b ? applyEdits(b.toString("utf8"), "article", globalVals, (u) => { const m = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(u); return (m && assetUrl(m[1])) || u; }, globalOrig).html : null;
+    const shell = sp ? applyEdits(sp.orig, sp.slug, sp.values, asset, sp.originals).html
+      : applyEdits(shellBuf.toString("utf8"), "article", globalVals, asset, globalOrig).html;   // still gets the shared menu and footer edits
+    for (const a of arts) {
+      const path = articlePath(a.slug); if (pageFiles.has(path)) { P.warnings.push(`${path}: clashes with a page of the website (skipped)`); continue; }
+      let html: string;
+      try { html = renderArticle(shell, a, arts, { siteUrl, asset: assetUrl }); } catch (e) { P.warnings.push(`${path}: ${(e as Error).message}`); continue; }
+      wanted.add(path);
+      const buf = Buffer.from(html), h = blobSha(buf);
+      P.state.push({ path, kind: "article", original: null, lastSha: h });
+      if (st.get(path)?.lastSha !== h) { P.changes.push({ path, content: buf }); P.touched.push(path); }
     }
-    if (!shell) P.warnings.push("article.html was not found in the repo, so no article pages were written");
-  }
-  const wanted = new Set<string>();
-  if (shell) for (const a of arts) {
-    const path = articlePath(a.slug); if (pageFiles.has(path)) { P.warnings.push(`${path}: clashes with a page of the website (skipped)`); continue; }
-    let html: string;
-    try { html = renderArticle(shell, a, arts, { siteUrl, asset: assetUrl }); } catch (e) { P.warnings.push(`${path}: ${(e as Error).message}`); continue; }
-    wanted.add(path);
-    const buf = Buffer.from(html), h = blobSha(buf);
-    P.state.push({ path, kind: "article", original: null, lastSha: h });
-    if (st.get(path)?.lastSha !== h) { P.changes.push({ path, content: buf }); P.touched.push(path); }
+  } else if (arts.length || rows.some((r) => r.kind === "article" || r.kind === "article-own")) {
+    // B) Every article is its own file in a folder (We Are Zion: blogs/<slug>.html). Its own file is edited; a new article gets a copy of one.
+    const known = rows.find((r) => r.kind === "article" || r.kind === "article-own")?.path.split("/")[0] ?? null;
+    const dir = known ?? articleDir([...pageOut.values()].map((x) => x.orig), new Set(arts.map((a) => a.slug)));
+    P.dir = dir;
+    if (!dir) { if (arts.length) P.warnings.push("No article files were found on this website (for example blogs/<name>.html), so articles were not written to Git"); }
+    else {
+      let template: string | null = null;
+      const own = new Map<string, { orig: string; repo: Buffer | null; created: boolean }>();
+      for (const a of arts) {
+        const path = `${dir}/${a.slug}.html`; if (pageFiles.has(path)) { P.warnings.push(`${path}: clashes with a page of the website (skipped)`); continue; }
+        const rec = st.get(path), repoBuf = await readFile(repo, path, head.commit);
+        if (rec && rec.kind === "article-own" && rec.original) {
+          if (repoBuf && rec.lastSha !== blobSha(repoBuf) && !force.has(path)) { P.warnings.push(`${path}: changed in Git outside the CMS, so it was not touched. Use "Take over this file" to let the CMS write it again.`); continue; }
+          own.set(path, { orig: force.has(path) && repoBuf ? repoBuf.toString("utf8") : rec.original, repo: repoBuf, created: false });
+        } else if (!rec && repoBuf) own.set(path, { orig: repoBuf.toString("utf8"), repo: repoBuf, created: false });
+        else own.set(path, { orig: "", repo: repoBuf, created: true });
+        if (!template && !own.get(path)!.created) template = own.get(path)!.orig;
+      }
+      if (!template) for (const r of rows) if (r.kind === "article-own" && r.original) { template = r.original; break; }
+      for (const a of arts) {
+        const path = `${dir}/${a.slug}.html`, o = own.get(path); if (!o) continue;
+        const base = o.created ? template : o.orig;
+        if (!base) { P.warnings.push(`${path}: no article file to copy the design from (skipped)`); continue; }
+        let html: string;
+        try {
+          html = applyEdits(base, "article", globalVals, asset, globalOrig).html;   // shared menu and footer edits
+          html = renderInFile(html, a, { url: siteUrl ? `${siteUrl}/${path}` : "", asset: assetUrl, keepUrl: !o.created && o.orig.includes(`/${path}"`) });
+          html = rebuildLists(html, arts, a.slug, assetUrl);                         // "Keep reading"
+        } catch (e) { P.warnings.push(`${path}: ${(e as Error).message}`); continue; }
+        if (o.created) wanted.add(path);
+        const buf = Buffer.from(html), h = blobSha(buf);
+        P.state.push({ path, kind: o.created ? "article" : "article-own", original: o.created ? null : o.orig, lastSha: h });
+        if (!o.repo || !o.repo.equals(buf)) { P.changes.push({ path, content: buf }); P.touched.push(path); }
+      }
+      // An article file that was the website's own before the CMS: when the article is no longer live, the file goes back to how it was.
+      const live = new Set(arts.map((a) => `${dir}/${a.slug}.html`));
+      for (const r of rows) if (r.kind === "article-own" && !live.has(r.path) && r.original) {
+        const cur = await readFile(repo, r.path, head.commit);
+        if (cur && r.lastSha && blobSha(cur) !== r.lastSha && !force.has(r.path)) { P.warnings.push(`${r.path}: changed in Git outside the CMS, so it was not put back. Use "Take over this file".`); continue; }
+        if (!cur || !cur.equals(Buffer.from(r.original))) { P.changes.push({ path: r.path, content: Buffer.from(r.original) }); P.touched.push(r.path); }
+        P.drop.push(r.path);
+      }
+    }
   }
   // Articles that are no longer live: remove the page we wrote for them (only files the CMS itself created).
-  for (const r of rows) if (r.kind === "article" && !wanted.has(r.path)) { P.changes.push({ path: r.path, content: null }); P.drop.push(r.path); P.touched.push(r.path); }
+  const keep = new Set(P.state.map((x) => x.path));
+  for (const r of rows) if (r.kind === "article" && !keep.has(r.path)) { P.changes.push({ path: r.path, content: null }); P.drop.push(r.path); P.touched.push(r.path); }
 
   // ---- pictures (written once; kept while used)
   const used = new Set<string>();
@@ -116,7 +164,7 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
     P.state.push({ path, kind: "asset", original: null, lastSha: "" });
     if (!st.has(path)) {
       const id = path.replace(/^assets\/uploads\//, "").replace(/\.\w+$/, "");
-      const [m] = await db.select({ data: schema.media.data }).from(schema.media).where(and(eq(schema.media.id, id), eq(schema.media.websiteId, wid)));
+      const [m] = await db.select({ data: schema.media.data }).from(schema.media).where(eq(schema.media.id, id));
       if (m?.data) { P.changes.push({ path, content: Buffer.from(m.data) }); P.touched.push(path); }
     }
   }
@@ -124,7 +172,7 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
 
   // ---- sitemap: only our own block between two comments
   if (wanted.size || rows.some((r) => r.kind === "article")) {
-    const buf = await readFile(repo, "sitemap.xml", head.commit);
+    const buf = smBuf;
     if (buf && siteUrl) {
       const xml = buf.toString("utf8");
       const block = wanted.size ? `  ${MARK_A}\n${[...wanted].sort().map((p) => `  <url><loc>${siteUrl}/${p}</loc></url>`).join("\n")}\n  ${MARK_B}\n` : "";
@@ -149,7 +197,7 @@ export async function gitPublish(websiteId: string, opts: { force?: string[]; wh
 
   // One run at a time per website. If something is published while a run is busy, it runs once more afterwards.
   const got = await db.execute(sql`UPDATE websites SET git_status = 'RUNNING', git_again = false, git_at = now()
-    WHERE id = ${websiteId} AND (git_status <> 'RUNNING' OR git_at < now() - interval '3 minutes') RETURNING id`);
+    WHERE id = ${websiteId} AND (git_status <> 'RUNNING' OR git_at < now() - interval '90 seconds') RETURNING id`);
   const rowsGot = (got as unknown as { rows: unknown[] }).rows;
   if (!rowsGot.length) { await db.update(schema.websites).set({ gitAgain: true }).where(eq(schema.websites.id, websiteId)); return { status: "SKIPPED", message: "Another publish is running; this change will follow it", files: 0 }; }
 
@@ -161,7 +209,7 @@ export async function gitPublish(websiteId: string, opts: { force?: string[]; wh
         const head = await getHead(repo, branch);
         const P = await plan(site, repo, head, new Set(opts.force ?? []));
         const pageFiles = new Set((await db.select().from(schema.pages).where(eq(schema.pages.websiteId, websiteId))).map((p) => readContent(p.content).file).filter((f): f is string => !!f));
-        const bad = P.changes.find((c) => !allowedPath(c.path, pageFiles));
+        const bad = P.changes.find((c) => !allowedPath(c.path, pageFiles, P.dir));
         if (bad) throw new GitError(`Refused to write ${bad.path}: not an allowed file`);
         let commit = head.commit;
         if (P.changes.length) {
@@ -190,12 +238,21 @@ export async function gitPublish(websiteId: string, opts: { force?: string[]; wh
   return result;
 }
 
-/** Called after a change that affects the live website. Runs after the answer is sent, so Publish never waits for GitHub. */
+/** Called after a change that affects the live website. Runs after the answer is sent, so Publish never waits for GitHub.
+    If another publish is busy, this waits for it to finish and then runs once more, so no change is ever left out. */
 export function gitAfter(websiteId: string, why: string) {
   after(async () => {
     try {
       const [s] = await db.select({ repo: schema.websites.gitRepo }).from(schema.websites).where(eq(schema.websites.id, websiteId));
-      if (s?.repo) await gitPublish(websiteId, { why });
+      if (!s?.repo) return;
+      let r = await gitPublish(websiteId, { why });
+      for (let i = 0; r.status === "SKIPPED" && /running/i.test(r.message) && i < 10; i++) {
+        await new Promise((ok) => setTimeout(ok, 4000));
+        const [w] = await db.select({ status: schema.websites.gitStatus, again: schema.websites.gitAgain }).from(schema.websites).where(eq(schema.websites.id, websiteId));
+        if (w?.status === "RUNNING") continue;
+        if (!w?.again) return;                       // the other run already included this change
+        r = await gitPublish(websiteId, { why });
+      }
     } catch (e) { console.error("git publish failed", e); }
   });
 }

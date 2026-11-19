@@ -157,6 +157,47 @@ const zafter = await file(ZR, "index.html");
 ok(zafter.includes("Zion heading from Git") && g.status !== "FAILED", "markerless page edited: " + g.status + " " + g.message);
 ok(Math.abs(zafter.length - zbefore.length) < 400, "only that text changed on the markerless page");
 
+// ---- website whose articles are files in a folder (We Are Zion: blogs/<slug>.html)
+{
+  const zl = await list(ZR);
+  ok(zl.includes("blogs/raya-and-the-last-dragon.html"), "a new CMS article gets its own file in blogs/");
+  const raya = await file(ZR, "blogs/raya-and-the-last-dragon.html");
+  ok(/<h1[^>]*>Raya And The Last Dragon/.test(raya) && raya.includes('class="nav__links"') && raya.includes("../css/"), "new article file uses the website's own article design");
+  ok(raya.includes('<link rel="canonical" href="https://www.wearezion.co/blogs/raya-and-the-last-dragon.html">'), "new article: its own address on the real domain");
+  ok(!/api\/v1\/media\//.test(raya), "new article: no picture points to the CMS");
+  const water = await file(ZR, "blogs/water-all-around.html"), water0 = readFileSync("/tmp/zt/blogs/water-all-around.html", "utf8");
+  ok(water.includes('"@type":"Church"') && water.includes('"@type":"BlogPosting"'), "article file: church data kept, article data updated");
+  ok(water.includes('href="https://www.wearezion.co/blogs/water-all-around.html"'), "article file: keeps its own address");
+  ok(/class="zmeta"[^>]*>[^<]*By Christine Jayakaran/.test(water), "article file: writer kept when the CMS has none");
+  const zb = await file(ZR, "blog.html");
+  ok(/zcard--big" href="blogs\/raya-and-the-last-dragon\.html"/.test(zb), "blog page: newest article is the big (Latest) card");
+  ok((zb.match(/class="zcard"/g) || []).length === 12, "blog page: all other live articles listed: " + (zb.match(/class="zcard"/g) || []).length);
+  ok(/zcard__a">By [^<]+ <i class="bi bi-arrow-up-right">/.test(zb), "blog page: author line keeps its arrow icon");
+  ok(!/api\/v1\/media\//.test(zb), "blog page: no picture points to the CMS");
+  ok(/<loc>https:\/\/www\.wearezion\.co\/blogs\/raya-and-the-last-dragon\.html<\/loc>/.test(await file(ZR, "sitemap.xml")), "sitemap lists the new article file on the real domain");
+  ok(!/<loc>[^<]*water-all-around[^<]*<\/loc>[\s\S]*cms:start[\s\S]*water-all-around/.test(await file(ZR, "sitemap.xml")), "existing article files are not listed twice");
+  // unpublish an article that was a file of the website before the CMS: the file goes back exactly as it was
+  const zbl = (await call(S, "GET", `/api/v1/admin/blogs?website=${Z}`)).j; const zitems = zbl.items ?? zbl;
+  const zw = zitems.find((b) => b.slug === "water-all-around"), zr = zitems.find((b) => b.slug === "raya-and-the-last-dragon");
+  let zat = await gitAt(S, Z);
+  await call(S, "POST", `/api/v1/admin/blogs/${zw.id}/publish`, { action: "unpublish" }); let zg = await waitGit(S, Z, zat);
+  ok((await file(ZR, "blogs/water-all-around.html")) === water0, "unpublished: the website's own article file is put back exactly");
+  ok(!(await file(ZR, "blog.html")).includes('href="blogs/water-all-around.html"'), "unpublished: its card is gone from the blog page");
+  zat = zg.at; await call(S, "POST", `/api/v1/admin/blogs/${zw.id}/publish`, { action: "publish" }); zg = await waitGit(S, Z, zat);
+  { const w2 = await file(ZR, "blogs/water-all-around.html"); const strip = (h) => h.replace(/"dateModified":"[^"]*"/, "").replace(/(<p class="zmeta"[^>]*>)[^<]*/, "$1");
+    if (strip(w2) !== strip(water)) { const a = strip(water).split("\n"), b = strip(w2).split("\n"); const i = a.findIndex((x, k) => x !== b[k]); console.log("DIFF line", i, "\n<", (a[i] || "").slice(0, 300), "\n>", (b[i] || "").slice(0, 300)); }
+    ok(strip(w2) === strip(water) && zg.status === "OK", "published again: the same file as before (apart from the new date)"); }
+  // unpublish an article the CMS created: its file is removed
+  zat = zg.at; await call(S, "POST", `/api/v1/admin/blogs/${zr.id}/publish`, { action: "unpublish" }); zg = await waitGit(S, Z, zat);
+  ok(!(await list(ZR)).includes("blogs/raya-and-the-last-dragon.html"), "unpublished: the file the CMS made is removed");
+  ok(/zcard--big" href="blogs\/water-all-around\.html"/.test(await file(ZR, "blog.html")), "the next newest becomes the big card");
+  zat = zg.at; await call(S, "POST", `/api/v1/admin/blogs/${zr.id}/publish`, { action: "publish" }); zg = await waitGit(S, Z, zat);
+  ok((await list(ZR)).includes("blogs/raya-and-the-last-dragon.html") && zg.status === "OK", "published again: file written again");
+  // the CMS never wrote outside its allowed files
+  const changed = new Set(); for (const f of await list(ZR)) { const a = await file(ZR, f), b = (() => { try { return readFileSync("/tmp/zt/" + f, "utf8"); } catch { return null; } })(); if (a !== b) changed.add(f); }
+  ok([...changed].every((f) => /\.html$/.test(f) && !f.includes("/") || /^blogs\/[a-z0-9-]+\.html$/.test(f) || /^assets\/uploads\//.test(f) || f === "sitemap.xml"), "only pages, blogs/*.html, uploads and the sitemap changed: " + [...changed].filter((f) => !/\.html$/.test(f)).join(","));
+}
+
 // ---- the token never leaves the server
 ok(!seen.some((t) => t.includes("test-token")), "the GitHub token is never in any answer");
 console.log(`git-publish: ${pass} passed, ${fail} failed`);
