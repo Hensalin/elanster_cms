@@ -23,12 +23,28 @@ export function allowedPath(path: string, pageFiles: Set<string>, dir: string | 
   return /^article-[a-z0-9][a-z0-9-]{0,100}\.html$/.test(path) || /^assets\/uploads\/[A-Za-z0-9_-]{1,40}\.(jpg|png|webp|gif|avif)$/.test(path) || path === "sitemap.xml";
 }
 
+/* "Content only from Git": a written page says so with <meta name="elanster-cms" content="git">, and the CMS scripts in it
+   load only inside the CMS editor's preview (?cms-edit=1 in the editor's frame). Visitors get the file exactly as it is in Git:
+   nothing is fetched from the CMS. Turning Git publishing off writes the pages once more without this. */
+const PREVIEW = `/[?&]cms-edit=1/.test(location.search)&&window.parent!==window`;
+export function gitOnly(html: string): string {
+  let out = html;
+  if (!/<meta\s+name=["']elanster-cms["']\s+content=["']git["']/i.test(out)) out = out.replace(/<\/head>/i, () => `  <meta name="elanster-cms" content="git">\n</head>`);
+  // <script src=".../cms-config.js|cms-content.js|cms.js" ...></script> → loaded only for the editor preview, in the same order
+  out = out.replace(/<script\b([^>]*?)\bsrc=(["'])([^"']*(?:cms-config|cms-content|\/cms)\.js[^"']*)\2([^>]*)>\s*<\/script>/gi, (_m, a: string, _q: string, src: string, b: string) => {
+    const attrs = [...`${a} ${b}`.matchAll(/\b(data-[a-z-]+)=(["'])([^"']*)\2/gi)].map((x) => `s.setAttribute(${JSON.stringify(x[1])},${JSON.stringify(x[3])});`).join("");
+    return `<script>/* Elanster CMS: this page's content comes from Git; the CMS script loads only in the CMS editor preview */if(${PREVIEW}){var s=document.createElement("script");s.src=${JSON.stringify(src)};s.async=false;${attrs}document.head.appendChild(s);}</script>`;
+  });
+  return out;
+}
+
 export type GitResult = { status: "OK" | "WARN" | "FAILED" | "SKIPPED"; message: string; files: number; commit?: string; warnings?: string[] };
 const sha = (s: string) => blobSha(Buffer.from(s));
 
 type Plan = { changes: FileChange[]; state: Array<{ path: string; kind: string; original: string | null; lastSha: string }>; drop: string[]; warnings: string[]; touched: string[]; dir: string | null };
 
-async function plan(site: typeof schema.websites.$inferSelect, repo: string, head: { commit: string }, force: Set<string>): Promise<Plan> {
+async function plan(site: typeof schema.websites.$inferSelect, repo: string, head: { commit: string }, force: Set<string>, mark = true): Promise<Plan> {
+  const only = (h: string) => (mark ? gitOnly(h) : h);
   const P: Plan = { changes: [], state: [], drop: [], warnings: [], touched: [], dir: null };
   const wid = site.id;
   const rows = await db.select().from(schema.gitFiles).where(eq(schema.gitFiles.websiteId, wid));
@@ -84,7 +100,7 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
     const done = applyEdits(x.orig, x.slug, x.values, (u) => { const m = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(u); return (m && assetUrl(m[1])) || u; }, x.originals);
     // Article lists are real HTML too: the blog page's list area (Elanster demo), or the article cards of the page (We Are Zion).
     const html = hasArticleList(done.html) ? renderList(done.html, arts, assetUrl) : rebuildLists(done.html, arts, null, assetUrl);
-    const buf = Buffer.from(html);
+    const buf = Buffer.from(only(html));
     P.state.push({ path: file, kind: "page", original: x.orig, lastSha: blobSha(buf) });
     if (!x.repoBuf.equals(buf)) { P.changes.push({ path: file, content: buf }); P.touched.push(file); }
   }
@@ -101,7 +117,7 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
     for (const a of arts) {
       const path = articlePath(a.slug); if (pageFiles.has(path)) { P.warnings.push(`${path}: clashes with a page of the website (skipped)`); continue; }
       let html: string;
-      try { html = renderArticle(shell, a, arts, { siteUrl, asset: assetUrl }); } catch (e) { P.warnings.push(`${path}: ${(e as Error).message}`); continue; }
+      try { html = only(renderArticle(shell, a, arts, { siteUrl, asset: assetUrl })); } catch (e) { P.warnings.push(`${path}: ${(e as Error).message}`); continue; }
       wanted.add(path);
       const buf = Buffer.from(html), h = blobSha(buf);
       P.state.push({ path, kind: "article", original: null, lastSha: h });
@@ -135,7 +151,7 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
         try {
           html = applyEdits(base, "article", globalVals, asset, globalOrig).html;   // shared menu and footer edits
           html = renderInFile(html, a, { url: siteUrl ? `${siteUrl}/${path}` : "", asset: assetUrl, keepUrl: !o.created && o.orig.includes(`/${path}"`) });
-          html = rebuildLists(html, arts, a.slug, assetUrl);                         // "Keep reading"
+          html = only(rebuildLists(html, arts, a.slug, assetUrl));                   // "Keep reading"
         } catch (e) { P.warnings.push(`${path}: ${(e as Error).message}`); continue; }
         if (o.created) wanted.add(path);
         const buf = Buffer.from(html), h = blobSha(buf);
@@ -189,7 +205,7 @@ async function setStatus(id: string, s: GitResult, extra: Partial<typeof schema.
 }
 
 /** Writes the website's current published content to its GitHub repo. Safe to call at any time and as often as needed. */
-export async function gitPublish(websiteId: string, opts: { force?: string[]; why?: string } = {}): Promise<GitResult> {
+export async function gitPublish(websiteId: string, opts: { force?: string[]; why?: string; unmark?: boolean } = {}): Promise<GitResult> {
   const [site] = await db.select().from(schema.websites).where(eq(schema.websites.id, websiteId));
   if (!site || site.deletedAt || !site.gitRepo) return { status: "SKIPPED", message: "Git publishing is not turned on for this website", files: 0 };
   if (!hasToken()) { const r: GitResult = { status: "FAILED", message: "GITHUB_TOKEN is not set on the server (Vercel → backend project → Environment Variables)", files: 0 }; await setStatus(websiteId, r); return r; }
@@ -207,7 +223,7 @@ export async function gitPublish(websiteId: string, opts: { force?: string[]; wh
     for (let attempt = 0; ; attempt++) {
       try {
         const head = await getHead(repo, branch);
-        const P = await plan(site, repo, head, new Set(opts.force ?? []));
+        const P = await plan(site, repo, head, new Set(opts.force ?? []), !opts.unmark);
         const pageFiles = new Set((await db.select().from(schema.pages).where(eq(schema.pages.websiteId, websiteId))).map((p) => readContent(p.content).file).filter((f): f is string => !!f));
         const bad = P.changes.find((c) => !allowedPath(c.path, pageFiles, P.dir));
         if (bad) throw new GitError(`Refused to write ${bad.path}: not an allowed file`);

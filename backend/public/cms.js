@@ -3,6 +3,8 @@
    The key says which website it is; nothing else is needed. If the CMS is unreachable the page stays as it is. */
 (function () {
   "use strict";
+  // Pages written by Git publishing already contain the content: nothing is fetched (the editor preview still works).
+  if (document.querySelector('meta[name="elanster-cms"][content="git"]') && !(/[?&]cms-edit=1/.test(location.search) && window.parent !== window)) return;
   var me = document.currentScript || document.querySelector('script[src*="cms.js"][data-key]');
   if (!me) return;
   var key = me.getAttribute("data-key"), base = me.src.replace(/\/cms\.js(\?.*)?$/, "");

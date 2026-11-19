@@ -54,7 +54,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
 
   // live preview: tell the page inside the frame what to show
   const send = useCallback((msg: object) => frame.current?.contentWindow?.postMessage({ source: "elanster-cms", ...msg }, "*"), []);
-  useEffect(() => { if (ready) send({ type: "values", original: orig, values: Object.fromEntries(fields.map((f) => [f.key, valueOf(f.key)])) }); }, [ready, vals, page]); // eslint-disable-line
+  useEffect(() => { if (ready) send({ type: "values", original: orig, live: page?.published ?? {}, values: Object.fromEntries(fields.map((f) => [f.key, valueOf(f.key)])) }); }, [ready, vals, page]); // eslint-disable-line
   useEffect(() => {
     const on = (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow || e.data?.source !== "elanster-site") return;

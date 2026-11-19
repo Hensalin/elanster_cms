@@ -1,0 +1,24 @@
+Website: demooo (demooo)
+Copied articles found: 16
+  - article-article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life-2
+  - article-article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life
+  - article-why-most-ai-products-fail-after-launch-and-what-production-ready-actually-means
+  - article-how-much-does-it-cost-to-build-an-ai-product-a-real-breakdown
+  - article-vibe-coding-technical-debt-what-happens-to-your-codebase-at-month-six
+  - article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life-2
+  - article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life
+  - article-article-how-much-does-it-cost-to-build-an-ai-product-a-real-breakdown
+  - article-article-vibe-coding-technical-debt-what-happens-to-your-codebase-at-month-six
+  - article-article-why-most-ai-products-fail-after-launch-and-what-production-ready-actually-means
+  - article-article-article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life-2
+  - article-article-article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life
+  - article-article-article-how-much-does-it-cost-to-build-an-ai-product-a-real-breakdown
+  - article-article-article-vibe-coding-technical-debt-what-happens-to-your-codebase-at-month-six
+  - article-article-article-why-most-ai-products-fail-after-launch-and-what-production-ready-actually-means
+  - article-the-importance-of-digital-marketing-in-todays-world
+Copied pages found: 0
+
+Hidden: 16 article(s), 0 page(s).
+
+Writing the website to GitHub (Hensalin/elanster_website-demo)…
+GitHub: OK — 34 file(s) written to Hensalin/elanster_website-demo. Vercel is rebuilding the website.

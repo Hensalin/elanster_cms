@@ -47,3 +47,14 @@ Each publish is **one commit**. Unpublishing takes the edits out again (the file
 - If a publish happens while another one is still writing, it waits for it and then runs once more, so no change is left out.
 
 Tests: `git-publish.mjs` (73), `git-copies.mjs` (22), `git-sync.mjs` (7).
+
+## Content only from Git
+With Git publishing on, every page the CMS writes gets `<meta name="elanster-cms" content="git">`, and the CMS scripts in it
+(`cms-config.js`, `cms-content.js`, `cms.js`) load **only in the CMS editor's preview**. Visitors get the files exactly as they are in Git:
+the demo pages make no request to the CMS at all; on We Are Zion the one-line loader in `js/zion.js` still downloads `cms.js`,
+which sees the tag and stops at once (no content is fetched).
+- The editor preview finds texts by their original words and by their published words (the files now hold the published ones).
+- Turning Git publishing off (empty repository, Save) writes the pages once more without the tag, so the website updates live again.
+- After Publish, the website changes when Vercel finishes (about 1 minute).
+
+Browser test: `git-only-setup.mjs` + `git-only-browser.py` (12 checks).

@@ -1,0 +1,5 @@
+<!doctype html><html><body><iframe id="f" style="width:1200px;height:800px"></iframe>
+<script>
+window.msgs=[]; addEventListener("message",e=>{ if(e.data&&e.data.source==="elanster-site") window.msgs.push(e.data); });
+document.getElementById("f").src = location.hash.slice(1);
+</script></body></html>

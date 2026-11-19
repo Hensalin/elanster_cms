@@ -147,9 +147,12 @@ async function isOwnArticlePage(websiteId: string, path: string) {
 
 /** Copies made by the bug above: articles "article-…-<x>" and pages "article-…-<x>" while article <x> exists. Hidden (soft delete), not erased. */
 export async function findCopies(websiteId: string) {
-  const blogs = await db.select({ id: schema.blogs.id, slug: schema.blogs.slug, title: schema.blogs.title }).from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), isNull(schema.blogs.deletedAt)));
+  const blogs = await db.select({ id: schema.blogs.id, slug: schema.blogs.slug, title: schema.blogs.title, content: schema.blogs.content }).from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), isNull(schema.blogs.deletedAt)));
   const real = new Set(blogs.map((b) => b.slug).filter((s) => s === baseSlug(s)));
-  const articles = blogs.filter((b) => b.slug !== baseSlug(b.slug) && real.has(baseSlug(b.slug)));
+  // A copy: named "article-…<x>" while article <x> exists, or named "article-…" with a whole published CMS page as its text
+  // (back link + "Keep reading" cards), which only the old sync could produce.
+  const wholePage = (c: string) => /art__back|All articles/.test(c) && /Keep reading/.test(c);
+  const articles = blogs.filter((b) => b.slug !== baseSlug(b.slug) && (real.has(baseSlug(b.slug)) || wholePage(b.content ?? ""))).map(({ content: _c, ...b }) => b);
   const pages = (await db.select({ id: schema.pages.id, slug: schema.pages.slug }).from(schema.pages).where(and(eq(schema.pages.websiteId, websiteId), isNull(schema.pages.deletedAt))))
     .filter((p) => /^article-/.test(p.slug) && real.has(baseSlug(p.slug)));
   return { articles, pages };

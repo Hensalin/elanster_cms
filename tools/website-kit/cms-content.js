@@ -4,6 +4,8 @@
    If the CMS cannot be reached, the text already in the HTML stays, so the website never breaks. */
 (function () {
   "use strict";
+  // Pages written by Git publishing already contain the content: nothing is fetched (the editor preview still works).
+  if (document.querySelector('meta[name="elanster-cms"][content="git"]') && !(/[?&]cms-edit=1/.test(location.search) && window.parent !== window)) return;
   var cfg = window.ELANSTER_CMS || {};
   var pathSlug = function () {
     var f = location.pathname.replace(/^\/+/, "").replace(/\/$/, "").replace(/\.html?$/, "").replace(/\/index$/, "");
@@ -65,7 +67,8 @@
   function tagImage(key, src) {
     if (!src || document.querySelector('[data-cms-img="' + key.replace(/"/g, "") + '"]')) return;
     document.querySelectorAll("img").forEach(function (im) {
-      if (!im.hasAttribute("data-cms-img") && (im.getAttribute("src") === src || im.getAttribute("data-src") === src)) im.setAttribute("data-cms-img", key);
+      var id = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(src), own = im.getAttribute("src") || "";   // Git publishing stores CMS pictures as /assets/uploads/<id>.<ext>
+      if (!im.hasAttribute("data-cms-img") && (own === src || im.getAttribute("data-src") === src || (id && own.indexOf("/assets/uploads/" + id[1] + ".") >= 0))) im.setAttribute("data-cms-img", key);
     });
   }
   // A picture uploaded to the CMS is always loaded from the CMS's own address.
@@ -100,7 +103,7 @@
     }, true);
     window.addEventListener("message", function (e) {
       var d = e.data; if (!d || d.source !== "elanster-cms") return;
-      if (d.type === "values") { tag(d.original); apply(d.values); }
+      if (d.type === "values") { tag(d.original); if (d.live) tag(d.live); apply(d.values); }   // pages written by Git publishing hold the published words
       if (d.type === "focus") {
         document.querySelectorAll(".cms-active").forEach(function (x) { x.classList.remove("cms-active"); });
         var q = String(d.key).replace(/"/g, ""), el = document.querySelector('[data-cms="' + q + '"],[data-cms-img="' + q + '"]');

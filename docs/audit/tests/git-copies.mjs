@@ -42,16 +42,16 @@ ok(copies() === 0 && copyPages() === 0, `sync with untagged old pages: no copies
 
 // Cleaning up copies made before the fix
 const first = q(`select slug from blogs where website_id='${E}' and deleted_at is null and status='PUBLISHED' and slug not like 'article-%' limit 1`);
-q(`insert into blogs (id, website_id, title, slug, excerpt, content, status, published_at) values ('copyA00000000000000000aa','${E}','Copy A','article-${first}','x','<p>x</p>','PUBLISHED', now()), ('copyB00000000000000000bb','${E}','Copy B','article-article-${first}','x','<p>x</p>','PUBLISHED', now()), ('keepC00000000000000000cc','${E}','A real one','article-writing-tips','x','<p>x</p>','PUBLISHED', now())`);
+q(`insert into blogs (id, website_id, title, slug, excerpt, content, status, published_at) values ('copyA00000000000000000aa','${E}','Copy A','article-${first}','x','<p>x</p>','PUBLISHED', now()), ('copyB00000000000000000bb','${E}','Copy B','article-article-${first}','x','<p>x</p>','PUBLISHED', now()), ('keepC00000000000000000cc','${E}','A real one','article-writing-tips','x','<p>x</p>','PUBLISHED', now()), ('copyD00000000000000000dd','${E}','Orphan copy','article-gone-post','x','<p><a href=\"blog.html\">← All articles</a></p><h2>Keep reading</h2>','PUBLISHED', now())`);
 q(`insert into pages (id, website_id, title, slug, status, content) values ('copyP00000000000000000pp','${E}','x','article-${first}','DRAFT','{}')`);
 r = await call("POST", `/api/v1/admin/websites/${E}/git`, { action: "publish" });
 ok(r.j.files > 0, "the copies were written to Git (as the bug did)");
 r = await call("GET", `/api/v1/admin/websites/${E}/git`);
-ok(r.j.copies.articles === 2 && r.j.copies.pages === 1, "copies found: " + JSON.stringify(r.j.copies));
+ok(r.j.copies.articles === 3 && r.j.copies.pages === 1, "copies found: " + JSON.stringify(r.j.copies));
 const ed = await (async () => { const x = await fetch(B + "/api/v1/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "editor@test.com", password: "TestPass-123!" }) }); return (x.headers.get("set-cookie") || "").split(";")[0]; })();
 ok((await fetch(B + `/api/v1/admin/websites/${E}/git`, { method: "POST", headers: { cookie: ed, "content-type": "application/json" }, body: JSON.stringify({ action: "remove_copies" }) })).status === 403, "an editor cannot remove copies");
 r = await call("POST", `/api/v1/admin/websites/${E}/git`, { action: "remove_copies" });
-ok(r.j.removed.articles === 2 && r.j.removed.pages === 1, "removed: " + JSON.stringify(r.j.removed));
+ok(r.j.removed.articles === 3 && r.j.removed.pages === 1, "removed: " + JSON.stringify(r.j.removed));
 ok(q(`select count(*) from blogs where id='keepC00000000000000000cc' and deleted_at is null`) === "1", "an article whose name only starts with 'article-' is kept");
 ok(q(`select count(*) from blogs where id in ('copyA00000000000000000aa','copyB00000000000000000bb') and deleted_at is not null`) === "2", "copies are hidden, not erased");
 const files = await (await fetch(`${G}/__list?repo=${ER}`)).json();
@@ -59,7 +59,7 @@ ok(!files.some((f) => f.startsWith(`article-article-${first}`) || f === `article
 ok(files.includes(`article-${first}.html`), "the real article's page is still there");
 ok(r.j.copies.articles === 0, "nothing left to clean");
 
-q(`delete from blogs where id in ('copyA00000000000000000aa','copyB00000000000000000bb','keepC00000000000000000cc'); delete from pages where id='copyP00000000000000000pp'`);
+q(`delete from blogs where id in ('copyA00000000000000000aa','copyB00000000000000000bb','keepC00000000000000000cc','copyD00000000000000000dd'); delete from pages where id='copyP00000000000000000pp'`);
 q(`update websites set domain='${domain0}', git_repo='' where id='${E}'`);
 console.log(`git-copies: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
