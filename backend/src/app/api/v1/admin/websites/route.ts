@@ -2,7 +2,8 @@ import { and, count, eq, inArray, isNull, max } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { accessibleWebsiteIds } from "@/lib/auth";
-import { admin, fail, json, slugify } from "@/lib/http";
+import { admin, fail, json, normDomain, slugify } from "@/lib/http";
+import { syncPages } from "@/lib/sitescan";
 
 export const GET = admin(async (_req, _c, user) => {
   const ids = await accessibleWebsiteIds(user);
@@ -28,7 +29,12 @@ export const POST = admin(async (req, _c, user) => {
   const slug = slugify(d.slug || d.name);
   const [dup] = await db.select().from(schema.websites).where(eq(schema.websites.slug, slug));
   if (dup) return fail("A website with this short name already exists", 409);
-  const [site] = await db.insert(schema.websites).values({ name: d.name, slug, domain: d.domain }).returning();
+  const domain = normDomain(d.domain);
+  if (domain) { const [same] = await db.select().from(schema.websites).where(and(eq(schema.websites.domain, domain), isNull(schema.websites.deletedAt)));
+    if (same) return fail(`This address is already connected as “${same.name}”. One address = one website.`, 409); }
+  const [site] = await db.insert(schema.websites).values({ name: d.name, slug, domain }).returning();
   await db.insert(schema.activityLogs).values({ userId: user.id, websiteId: site.id, action: "WEBSITE_CREATE", entity: "website", entityId: site.id, summary: `Added website ${site.name}` });
-  return json(site, 201);
+  // Framer-style: the new website's pages come in straight away.
+  let sync = null; if (domain) { try { sync = await syncPages(site.id, user.id); } catch (e) { sync = { error: (e as Error).message }; } }
+  return json({ ...site, sync }, 201);
 }, { superOnly: true });

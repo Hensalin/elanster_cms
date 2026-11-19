@@ -17,7 +17,7 @@ export default function Websites() {
       <div className="card tbl" style={{ padding: 0 }}><table>
         <thead><tr><th>Website</th><th>Address</th><th className="num">Live</th><th className="num">Drafts</th><th>Connection</th><th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{sites.map((s) => {
-          const setAddress = async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast("Address saved"); load(); } catch (e) { toast((e as Error).message, true); } };
+          const setAddress = async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { const r = await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast(r.sync?.pages ? `Address saved · ${r.sync.pages.length} pages brought in from the website` : r.sync?.error ? `Address saved. Pages not read: ${r.sync.error}` : "Address saved"); load(); } catch (e) { toast((e as Error).message, true); } };
           const toggle = async () => { try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website turned off" : "Website turned on"); load(); } catch (e) { toast((e as Error).message, true); } };
           return (<tr key={s.id}>
           <td><div className="site-cell"><span className={"site-ic" + (s.active ? " on" : "")} aria-hidden>{s.name.slice(0, 1)}</span><div><b>{s.name}</b><small>{s.slug}</small></div></div></td>
@@ -32,21 +32,21 @@ export default function Websites() {
             <button className="icon-btn danger-ic" title="Remove website" aria-label={`Remove ${s.name}`} onClick={async () => { if (!confirm(`Remove “${s.name}” from the CMS? Its articles and pages are hidden with it.`)) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "DELETE" }); toast("Website removed"); load(); } catch (e) { toast((e as Error).message, true); } }}><Trash2 size={15} /></button>
           </div>}</td>
         </tr>); })}</tbody></table></div>}
-    {add && <AddSite onClose={() => setAdd(false)} onDone={() => { setAdd(false); toast("Website added"); load(); }} />}
+    {add && <AddSite onClose={() => setAdd(false)} onDone={(r: any) => { setAdd(false); toast(r?.sync?.pages ? `Website added · ${r.sync.pages.length} pages brought in from ${r.domain.replace(/^https?:\/\//, "")}` : r?.sync?.error ? `Website added. Pages not read: ${r.sync.error}` : "Website added"); load(); }} />}
     {checkFor && <CheckPanel site={checkFor} onClose={() => { setCheckFor(null); load(); }} />}
     {keysFor && <Keys site={keysFor} onClose={() => setKeysFor(null)} toast={toast} />}
     {el}
   </>);
 }
 
-function AddSite({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function AddSite({ onClose, onDone }: { onClose: () => void; onDone: (r: any) => void }) {
   const [name, setName] = useState(""); const [domain, setDomain] = useState(""); const [err, setErr] = useState("");
   return (<div className="modal" onClick={onClose}><form onClick={(e) => e.stopPropagation()} onSubmit={async (e) => {
-    e.preventDefault(); setErr(""); try { await api("/api/v1/admin/websites", { method: "POST", body: { name, domain } }); onDone(); } catch (x) { setErr((x as Error).message); } }}
+    e.preventDefault(); setErr(""); try { onDone(await api("/api/v1/admin/websites", { method: "POST", body: { name, domain } })); } catch (x) { setErr((x as Error).message); } }}
     style={{ background: "var(--card)", borderRadius: 20, padding: 24, width: "min(520px,100%)" }}>
     <h2>Add website</h2>
     <div className="field"><label htmlFor="n">Name</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Indzara" /></div>
-    <div className="field"><label htmlFor="d">Domain</label><input id="d" type="text" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="https://www.example.com" /></div>
+    <div className="field"><label htmlFor="d">Website address</label><input id="d" type="text" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="https://www.example.com" /><small>All pages on this address are brought in automatically. One address = one website.</small></div>
     {err && <p className="err-text">{err}</p>}
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn dark">Add website</button></div>
   </form></div>);

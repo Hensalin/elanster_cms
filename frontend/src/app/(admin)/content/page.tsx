@@ -21,7 +21,20 @@ function ContentScreen() {
   const [q, setQ] = useState(""); const [status, setStatus] = useState(""); const [sort, setSort] = useState<Sort>({ key: "updatedAt", dir: -1 });
   const [sel, setSel] = useState<Set<string>>(new Set()); const [open, setOpen] = useState<null | { kind: Kind; id: string; title: string; first?: string }>(null);
   const [page, setPage] = useState(1); const [pages, setPages] = useState(1); const [busy, setBusy] = useState(false);
-  const loadSeq = useRef(0);
+  const loadSeq = useRef(0); const [syncing, setSyncing] = useState(false); const autoSynced = useRef<Set<string>>(new Set());
+  const [sites, setSites] = useState<any[]>([]);
+  useEffect(() => { api<any[]>("/api/v1/admin/websites").then(setSites).catch(() => {}); }, []);
+  const syncTarget = () => (site ? sites.find((x) => x.id === site) : sites.find((x) => x.active && x.domain)) ?? null;
+  /** Framer-style: read the live website and bring in all its pages. */
+  const syncPages = async (quiet = false) => {
+    const t = syncTarget(); if (!t) { if (!quiet) toast("Choose a website (top left) that has an address", true); return; }
+    setSyncing(true);
+    try {
+      const r = await api(`/api/v1/admin/websites/${t.id}/sync-pages`, { method: "POST" });
+      toast(`${r.pages.length} page${r.pages.length === 1 ? "" : "s"} found on ${t.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}` + (r.created ? ` · ${r.created} new` : "") + (r.removed ? ` · ${r.removed} removed` : "") + (r.untagged?.length ? ` · ${r.untagged.length} not editable yet` : ""));
+      load();
+    } catch (e) { if (!quiet) toast((e as Error).message, true); } finally { setSyncing(false); }
+  };
 
   const load = useCallback(async () => {
     const seq = ++loadSeq.current;
@@ -43,6 +56,10 @@ function ContentScreen() {
   }, [site, kind, q, status, page]); // eslint-disable-line
   useEffect(() => { setRows(null); const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load]); // eslint-disable-line
   useEffect(() => { setSel(new Set()); setPage(1); }, [kind, site, q, status]);
+  useEffect(() => {
+    const t = syncTarget(); if (kind !== "pages" || !rows || rows.length || !t || autoSynced.current.has(t.id)) return;
+    autoSynced.current.add(t.id); syncPages(true);
+  }, [kind, rows, sites, site]); // eslint-disable-line
   // Links like /content?open=blogs:ID (from the Ctrl+K search) or /content?new=1
   useEffect(() => {
     const o = sp.get("open"); if (o) { const [k, id] = o.split(":"); if (k === "pages" && id) { router.replace(`/pages/${id}`); return; } if (k && id) { setKind(k as Kind); setOpen({ kind: k as Kind, id, title: "" }); } router.replace("/content"); }
@@ -84,9 +101,10 @@ function ContentScreen() {
     </aside>
     <section className="list" aria-label={kind === "blogs" ? "Blog articles" : "Website pages"}>
       <div className="list-head">
-        <div><h1>{kind === "blogs" ? "Blog" : "Pages"}</h1><p>{kind === "blogs" ? "Write, review and publish articles. They appear on your website's Blog page." : "Edit the text, links, images and SEO of your real website pages. The design stays exactly as it is."}</p></div>
+        <div><h1>{kind === "blogs" ? "Blog" : "Pages"}</h1><p>{kind === "blogs" ? "Write, review and publish articles. They appear on your website's Blog page." : "Every page of your live website, kept in sync. Edit text, links and images; the design stays exactly as it is."}</p></div>
         <div className="list-actions">
-          {kind === "pages" && <button className="btn" onClick={() => router.push("/pages")}><Link2 size={15} /> Website connection</button>}
+          {kind === "pages" && <button className="btn dark" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Sync from website"}</button>}
+          {kind === "pages" && <button className="btn" onClick={() => router.push("/pages")}><Link2 size={15} /> Connection</button>}
           {kind === "blogs" && <button className="btn dark" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button>}
         </div>
       </div>
@@ -102,9 +120,9 @@ function ContentScreen() {
         {!shown ? <div className="skel" aria-busy="true" aria-label="Loading">{[0, 1, 2, 3, 4].map((i) => <div key={i} />)}</div>
           : !shown.length ? <div className="empty-state"><div className="es-ic">{kind === "blogs" ? <Newspaper size={28} /> : <FileText size={28} />}</div>
             <h3>{q || status ? "Nothing matches" : kind === "blogs" ? "No articles yet" : "No pages yet"}</h3>
-            <p>{q || status ? "Try a different word or clear the filters." : kind === "blogs" ? "Write your first article. It stays a draft until you publish it." : "Open Website connection to import your website's pages."}</p>
+            <p>{q || status ? "Try a different word or clear the filters." : kind === "blogs" ? "Write your first article. It stays a draft until you publish it." : syncing ? "Reading your website and bringing in every page…" : "Click below and the CMS reads your live website and brings in every page, like Framer."}</p>
             {!q && !status && kind === "blogs" && <button className="btn orange" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button>}
-            {!q && !status && kind === "pages" && <button className="btn orange" onClick={() => router.push("/pages")}>Open website connection</button>}</div>
+            {!q && !status && kind === "pages" && <button className="btn orange" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Bring in pages from website"}</button>}</div>
             : <table><thead><tr><th style={{ width: 34 }}><input type="checkbox" aria-label="Select all" checked={all} onChange={() => setSel(all ? new Set() : new Set(shown.map((r) => r.id)))} /></th>
               {th("title", "Title")}{th("status", "Status")}{th("slug", "Slug")}{kind === "blogs" ? th("category", "Category") : th("website", "Website")}{kind === "blogs" ? th("author", "Author") : <th>Edits</th>}{th("updatedAt", "Updated")}<th><span className="sr-only">Quick actions</span></th></tr></thead>
               <tbody>{shown.map((r) => (<tr key={r.id} className={(open?.id === r.id ? "on " : "") + (sel.has(r.id) ? "picked" : "")} onClick={() => openRow(r)}>

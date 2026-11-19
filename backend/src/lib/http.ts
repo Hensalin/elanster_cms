@@ -25,3 +25,6 @@ export function admin<C = unknown>(h: Handler<C>, opts?: { superOnly?: boolean }
 
 export const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "") || "untitled";
+
+/** "HTTPS://Site.com/" → "https://site.com" so the same address is always written the same way. */
+export const normDomain = (d: string) => { const t = d.trim().replace(/\/+$/, ""); if (!t) return ""; try { const u = new URL(/^https?:\/\//i.test(t) ? t : "https://" + t); return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, "")}`; } catch { return t; } };
