@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { applyEdits } from "./htmledit";
 import { articleDir, rebuildLists, renderInFile } from "./sitearticles";
-import { articlePath, hasArticleList, mediaIds, renderArticle, renderList, validSlug, type Article } from "./articlepage";
+import { ARTICLE_DIR, articlePath, forwardPage, hasArticleList, mediaIds, oldArticlePath, renderArticle, renderList, validSlug, type Article } from "./articlepage";
 import { blobSha, commitFiles, getHead, GitError, hasToken, readFile, validBranch, validRepo, type FileChange } from "./github";
 import { blogWithRelations } from "./blogs";
 import { livePublished, notDeleted, publicBlog } from "./public";
@@ -20,6 +20,7 @@ const MARK_A = "<!-- cms:start -->", MARK_B = "<!-- cms:end -->";
 export function allowedPath(path: string, pageFiles: Set<string>, dir: string | null = null) {
   if (dir && /^[a-z0-9_-]{1,40}$/i.test(dir) && new RegExp(`^${dir}/[a-z0-9][a-z0-9-]{0,100}\\.html$`).test(path)) return true;   // the website's article folder
   if (pageFiles.has(path)) return /^[A-Za-z0-9_\-./]+\.html$/.test(path) && !path.includes("..") && !path.startsWith("/") && !path.split("/").some((s) => s.startsWith("."));
+  if (new RegExp(`^${ARTICLE_DIR}/[a-z0-9][a-z0-9-]{0,100}\\.html$`).test(path) && !pageFiles.has(path)) return true;
   return /^article-[a-z0-9][a-z0-9-]{0,100}\.html$/.test(path) || /^assets\/uploads\/[A-Za-z0-9_-]{1,40}\.(jpg|png|webp|gif|avif)$/.test(path) || path === "sitemap.xml";
 }
 
@@ -99,7 +100,9 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
   for (const [file, x] of pageOut) {
     const done = applyEdits(x.orig, x.slug, x.values, (u) => { const m = /\/api\/v1\/media\/([A-Za-z0-9_-]+)/.exec(u); return (m && assetUrl(m[1])) || u; }, x.originals);
     // Article lists are real HTML too: the blog page's list area (Elanster demo), or the article cards of the page (We Are Zion).
-    const html = hasArticleList(done.html) ? renderList(done.html, arts, assetUrl) : rebuildLists(done.html, arts, null, assetUrl);
+    let html = hasArticleList(done.html) ? renderList(done.html, arts, assetUrl) : rebuildLists(done.html, arts, null, assetUrl);
+    const up = "../".repeat(file.split("/").length - 1), live = new Set(arts.map((a) => a.slug));
+    html = html.replace(/(\shref=)(["'])(?:\.\.\/)*article\.html\?(?:slug|article)=([a-z0-9][a-z0-9-]*)\2/gi, (m, a: string, q: string, slug: string) => (live.has(slug) ? `${a}${q}${up}${articlePath(slug)}${q}` : m));
     const buf = Buffer.from(only(html));
     P.state.push({ path: file, kind: "page", original: x.orig, lastSha: blobSha(buf) });
     if (!x.repoBuf.equals(buf)) { P.changes.push({ path: file, content: buf }); P.touched.push(file); }
@@ -122,6 +125,13 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
       const buf = Buffer.from(html), h = blobSha(buf);
       P.state.push({ path, kind: "article", original: null, lastSha: h });
       if (st.get(path)?.lastSha !== h) { P.changes.push({ path, content: buf }); P.touched.push(path); }
+      // the older address forwards to the new one (old links and search results keep working)
+      const old = oldArticlePath(a.slug);
+      if (!pageFiles.has(old)) {
+        const fb = Buffer.from(forwardPage(a.slug, a.title, siteUrl)), fh = blobSha(fb);
+        P.state.push({ path: old, kind: "article", original: null, lastSha: fh });
+        if (st.get(old)?.lastSha !== fh) { P.changes.push({ path: old, content: fb }); P.touched.push(old); }
+      }
     }
   } else if (arts.length || rows.some((r) => r.kind === "article" || r.kind === "article-own")) {
     // B) Every article is its own file in a folder (We Are Zion: blogs/<slug>.html). Its own file is edited; a new article gets a copy of one.

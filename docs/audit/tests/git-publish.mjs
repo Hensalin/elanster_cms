@@ -39,23 +39,30 @@ let r = await call(S, "POST", `/api/v1/admin/websites/${E}/git`, { action: "publ
 ok(r.status === 200 && ["OK", "WARN"].includes(r.j.status), "first publish: " + r.j?.status + " " + r.j?.message);
 ok((await commits(ER)).length === n0 + 1, "first publish = exactly one commit");
 const files = await list(ER);
-ok(files.includes("article-final-check-article.html") && files.includes("article-quick-post-from-the-new-editor.html"), "article pages written for live articles");
-ok(!files.some((f) => /^article-(slide-over|review-flow|close|draft-saved)/.test(f)), "no pages for drafts");
-const art = await file(ER, "article-final-check-article.html");
-ok(art.includes('<link rel="canonical" href="https://www.elanster.com/article-final-check-article.html">'), "canonical is the real address");
+ok(files.includes("blog/final-check-article.html") && files.includes("blog/quick-post-from-the-new-editor.html"), "article pages written for live articles");
+ok(!files.some((f) => /^blog\/(slide-over|review-flow|close|draft-saved)/.test(f)), "no pages for drafts");
+const art = await file(ER, "blog/final-check-article.html");
+ok(art.includes('<link rel="canonical" href="https://www.elanster.com/blog/final-check-article.html">'), "canonical is the real address");
 ok(!/js\/blog\.js/.test(art), "the website script that would overwrite the article is removed");
 ok(art.includes('id="articleApp"><a class="art__back"') && art.includes('<div class="art__body">'), "article written into the real design");
 ok(art.includes('"@type":"Article"') && /<title>[^<]+\| Elanster<\/title>/.test(art), "Google tags");
-ok(art.includes("css/styles.css") && art.includes('class="nav__links"'), "same menu and styles as the website");
+ok(art.includes('href="../css/styles.css') && art.includes('class="nav__links"') && art.includes('href="../blog.html"') && !/\s(?:href|src)="(?:css|js|assets)\//.test(art), "same menu and styles as the website, with links fixed for the blog folder");
+{ const fw = await file(ER, "article-final-check-article.html");
+  ok(fw && fw.includes('url=blog/final-check-article.html') && fw.includes('name="robots" content="noindex"') && fw.includes('rel="canonical" href="https://www.elanster.com/blog/final-check-article.html"'), "the old address forwards to the new one");
+  const ix = await file(ER, "index.html");
+  const liveSlugs = new Set(((await call(S, "GET", `/api/v1/admin/blogs?website=${E}&status=PUBLISHED`)).j?.items ?? []).map((b) => b.slug));
+  const olds = [...ix.matchAll(/href="article\.html\?slug=([^"]+)"/g)].map((m) => m[1]);
+  ok(olds.every((s2) => !liveSlugs.has(s2)) && /href="blog\/[a-z0-9-]+\.html"/.test(ix), "home page: links to live articles go to the real files (drafts are left alone): " + olds.filter((s2) => liveSlugs.has(s2)).join(","));
+  ok(!(await file(ER, "sitemap.xml")).includes("article-final-check-article.html"), "sitemap lists only the new addresses"); }
 { const menu = (h) => (/<nav class="nav__links"[\s\S]*?<\/nav>/.exec(h) || [""])[0].replace(/\s*(class="is-active"|aria-current="page"|data-cms="[^"]*")/g, "").replace(/\s+/g, " ");
   const want = menu(await file(ER, "index.html")).replace(/href="[^"]*"/g, ""), got = menu(art).replace(/href="[^"]*"/g, "");
   ok(want.replace(/<[^>]+>/g, "|") === got.replace(/<[^>]+>/g, "|"), "article pages get the shared menu edits too"); }
 const bl = await file(ER, "blog.html");
 ok(bl.includes('id="blogList" data-cms-list="articles"') && !bl.includes('id="blogApp"'), "blog page: list written as real HTML (the website script leaves it alone)");
-ok(bl.includes('href="article-final-check-article.html"') && bl.includes('href="article-quick-post-from-the-new-editor.html"'), "blog page: cards link to the real article pages");
-ok(!/href="article-(slide-over|review-flow|close|draft-saved)/.test(bl), "blog page: no drafts in the list");
+ok(bl.includes('href="blog/final-check-article.html"') && bl.includes('href="blog/quick-post-from-the-new-editor.html"'), "blog page: cards link to the real article pages");
+ok(!/href="blog\/(slide-over|review-flow|close|draft-saved)/.test(bl), "blog page: no drafts in the list");
 const sm = await file(ER, "sitemap.xml");
-ok(sm.includes("<!-- cms:start -->") && sm.includes("https://www.elanster.com/article-final-check-article.html") && sm.includes("https://www.elanster.com/work.html"), "sitemap: our block added, the rest kept");
+ok(sm.includes("<!-- cms:start -->") && sm.includes("https://www.elanster.com/blog/final-check-article.html") && sm.includes("https://www.elanster.com/work.html"), "sitemap: our block added, the rest kept");
 const idx0 = await file(ER, "index.html"), orig = readFileSync("/tmp/el/index.html", "utf8");
 ok(idx0 !== orig && Math.abs(idx0.length - orig.length) < 3000, "home page edits written (small change)");
 
@@ -95,22 +102,22 @@ at = g.at;
 r = await call(S, "POST", `/api/v1/admin/blogs/${blog.id}/publish`, { action: "publish" });
 ok(r.status === 200, "article published");
 g = await waitGit(S, E, at);
-const a2 = await file(ER, `article-${blog.slug}.html`);
+const a2 = await file(ER, `blog/${blog.slug}.html`);
 ok(a2 && a2.includes("<h1>Git Published Article</h1>") && a2.includes("Hello from Git.") && a2.includes("<span>Hensalin</span>"), "new article page written");
 ok(a2.includes(`/assets/uploads/${media.id}.png`) && !a2.includes("/api/v1/media/"), "pictures point to the committed copy, not the CMS");
 ok((await list(ER)).includes(`assets/uploads/${media.id}.png`), "picture committed");
 const bl2 = await file(ER, "blog.html");
-ok(bl2.indexOf(`href="article-${blog.slug}.html"`) > -1 && bl2.indexOf(`href="article-${blog.slug}.html"`) < bl2.indexOf('href="article-final-check-article.html"'), "blog page: the new article is the first card");
+ok(bl2.indexOf(`href="blog/${blog.slug}.html"`) > -1 && bl2.indexOf(`href="blog/${blog.slug}.html"`) < bl2.indexOf('href="blog/final-check-article.html"'), "blog page: the new article is the first card");
 ok(bl2.includes(`/assets/uploads/${media.id}.png`), "blog page: card picture is the committed copy");
-ok((await file(ER, "sitemap.xml")).includes(`article-${blog.slug}.html`), "sitemap lists the new article");
+ok((await file(ER, "sitemap.xml")).includes(`blog/${blog.slug}.html`), "sitemap lists the new article");
 at = g.at;
 await call(S, "POST", `/api/v1/admin/blogs/${blog.id}/publish`, { action: "unpublish" });
 g = await waitGit(S, E, at);
 const after = await list(ER);
-ok(!after.includes(`article-${blog.slug}.html`), "unpublished article page removed");
+ok(!after.includes(`blog/${blog.slug}.html`) && !after.includes(`article-${blog.slug}.html`), "unpublished: article page and its forwarding page removed");
 ok(!after.includes(`assets/uploads/${media.id}.png`), "picture no longer used is removed");
-ok(!(await file(ER, "sitemap.xml")).includes(`article-${blog.slug}.html`), "sitemap entry removed");
-ok(!(await file(ER, "blog.html")).includes(`article-${blog.slug}.html`), "blog page: unpublished article's card removed");
+ok(!(await file(ER, "sitemap.xml")).includes(`blog/${blog.slug}.html`), "sitemap entry removed");
+ok(!(await file(ER, "blog.html")).includes(`blog/${blog.slug}.html`), "blog page: unpublished article's card removed");
 ok(after.includes("work.html") && after.includes("css/styles.css") && after.length > 50, "nothing else deleted");
 
 // ---- someone edits a file directly in Git: the CMS does not overwrite it, until told to

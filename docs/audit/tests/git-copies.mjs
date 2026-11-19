@@ -8,7 +8,7 @@ const q = (sql) => execSync(`${PG} "${sql}"`).toString().trim();
 const r0 = await fetch(B + "/api/v1/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "admin@elanster.com", password: "TestPass-123!" }) });
 const S = (r0.headers.get("set-cookie") || "").split(";")[0];
 const call = async (m, p, b) => { const r = await fetch(B + p, { method: m, headers: { cookie: S, "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, j: await r.json().catch(() => null) }; };
-const exportRepo = async () => { execSync("rm -rf /tmp/elgit && mkdir -p /tmp/elgit"); const l = await (await fetch(`${G}/__list?repo=${ER}`)).json();
+const exportRepo = async () => { execSync("mkdir -p /tmp/elgit && find /tmp/elgit -mindepth 1 -delete"); const l = await (await fetch(`${G}/__list?repo=${ER}`)).json();
   for (const p of l) { const b = Buffer.from(await (await fetch(`${G}/__file?repo=${ER}&path=${encodeURIComponent(p)}`)).arrayBuffer()); execSync(`mkdir -p "/tmp/elgit/${p.split("/").slice(0, -1).join("/") || "."}"`); (await import("node:fs")).writeFileSync("/tmp/elgit/" + p, b); } };
 const copies = () => Number(q(`select count(*) from blogs where website_id='${E}' and deleted_at is null and slug like 'article-%'`));
 const copyPages = () => Number(q(`select count(*) from pages where website_id='${E}' and deleted_at is null and slug like 'article-%'`));

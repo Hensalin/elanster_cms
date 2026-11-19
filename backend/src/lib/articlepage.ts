@@ -6,7 +6,29 @@ import type { publicBlog } from "./public";
 
 export type Article = ReturnType<typeof publicBlog>;
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
-export const articlePath = (slug: string) => `article-${slug}.html`;
+/** Where an article lives: its own file in the blog folder (clean address, all articles together). */
+export const ARTICLE_DIR = "blog";
+export const articlePath = (slug: string) => `${ARTICLE_DIR}/${slug}.html`;
+/** The older address (article-<slug>.html); it stays as a small page that forwards to the new one, so old links keep working. */
+export const oldArticlePath = (slug: string) => `article-${slug}.html`;
+
+/** A page moved one folder down: its relative links and files (css/…, js/…, blog.html, assets/…) get "../" in front. */
+export function rebase(html: string, prefix = "../") {
+  const rel = (v: string) => !/^(?:[a-z][a-z0-9+.-]*:|\/|#|\?|\{|\$)/i.test(v.trim()) && v.trim() !== "";
+  return html
+    .replace(/(\s(?:href|src|action|poster|data-src)\s*=\s*)(["'])([^"']*)\2/gi, (m, a: string, q: string, v: string) => (rel(v) ? `${a}${q}${prefix}${v.trim()}${q}` : m))
+    .replace(/(\s(?:srcset|data-srcset)\s*=\s*)(["'])([^"']*)\2/gi, (_m, a: string, q: string, v: string) =>
+      `${a}${q}${v.split(",").map((part) => { const t = part.trim(); return rel(t) ? part.replace(t, prefix + t) : part; }).join(",")}${q}`)
+    .replace(/url\((["']?)([^"')]+)\1\)/gi, (m, q: string, v: string) => (rel(v) && !/^data:/i.test(v) ? `url(${q}${prefix}${v}${q})` : m));
+}
+
+/** The small page left at the old address: sends visitors (and Google) to the article's new address. */
+export function forwardPage(slug: string, title: string, siteUrl: string) {
+  const to = `${ARTICLE_DIR}/${slug}.html`, abs = siteUrl ? `${siteUrl}/${to}` : to;
+  return `<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title>\n<meta name="generator" content="Elanster CMS">\n<meta name="robots" content="noindex">\n` +
+    `<link rel="canonical" href="${esc(abs)}">\n<meta http-equiv="refresh" content="0; url=${esc(to)}">\n<script>location.replace(${JSON.stringify(to)} + location.hash)</script>\n</head>` +
+    `<body><p>This article has moved: <a href="${esc(to)}">${esc(title)}</a></p></body></html>\n`;
+}
 export const validSlug = (s: string) => /^[a-z0-9][a-z0-9-]{0,100}$/.test(s);
 const MEDIA = /(?:https?:\/\/[^"'\s)]*?)?\/api\/v1\/media\/([A-Za-z0-9_-]+)/g;
 export const mediaIds = (s: string) => [...s.matchAll(MEDIA)].map((m) => m[1]);
@@ -84,5 +106,5 @@ export function renderArticle(shell: string, a: Article, all: Article[], opts: {
   // The shell's own og/twitter/canonical tags (if any) are replaced by the ones above.
   out = out.replace(/\s*<link\b[^>]*rel="canonical"[^>]*>/gi, "").replace(/\s*<meta\b[^>]*(?:property="og:|name="twitter:)[^>]*>/gi, "");
   out = out.replace(/<\/head>/i, () => `  ${head.join("\n  ")}\n</head>`);
-  return out;
+  return rebase(out);
 }

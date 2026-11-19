@@ -10,7 +10,7 @@ const call = async (m, p, b) => { const r = await fetch(B + p, { method: m, head
 const file = async (p) => { const r = await fetch(`${G}/__file?repo=${ZR}&path=${encodeURIComponent(p)}`); return r.status === 200 ? r.text() : null; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const waitGit = async (before) => { for (let i = 0; i < 80; i++) { const g = (await call("GET", `/api/v1/admin/websites/${Z}/git`)).j; if (g.status !== "RUNNING" && g.at !== before) return g; await sleep(500); } return null; };
-const exportRepo = async () => { execSync("rm -rf /tmp/zgit && mkdir -p /tmp/zgit"); const l = await (await fetch(`${G}/__list?repo=${ZR}`)).json();
+const exportRepo = async () => { execSync("mkdir -p /tmp/zgit && find /tmp/zgit -mindepth 1 -delete"); const l = await (await fetch(`${G}/__list?repo=${ZR}`)).json();
   for (const p of l) { if (/\.zip$/.test(p)) continue; const b = Buffer.from(await (await fetch(`${G}/__file?repo=${ZR}&path=${encodeURIComponent(p)}`)).arrayBuffer()); fs.mkdirSync("/tmp/zgit/" + p.split("/").slice(0, -1).join("/"), { recursive: true }); fs.writeFileSync("/tmp/zgit/" + p, b); } };
 
 await fetch(G + "/__seed", { method: "POST", body: JSON.stringify({ repo: ZR, dir: "/tmp/zt" }) });
