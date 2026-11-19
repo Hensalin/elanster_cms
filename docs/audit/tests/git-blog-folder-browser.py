@@ -18,10 +18,6 @@ with sync_playwright() as p:
     more=pg.locator(".art__more a.post").first
     if more.count(): mh=more.get_attribute("href"); check(mh.startswith("../blog/"), "keep reading link: "+mh); more.click(); pg.wait_for_timeout(2000); check("/blog/" in pg.url, "keep reading opens "+pg.url)
     nav=pg.locator('.nav__links a[href="../services.html"]'); check(nav.count()>0, "menu links fixed for the folder")
-    # old address forwards
-    slug=href.split("/")[-1][:-5]
-    pg.goto("http://localhost:3206/article-"+slug+".html"); pg.wait_for_timeout(2500)
-    check(pg.url.endswith("/blog/"+slug+".html"), "old address forwards: "+pg.url)
     # home page card to a live article
     pg.goto("http://localhost:3206/index.html"); pg.wait_for_timeout(2000)
     hl=pg.locator('a[href^="blog/"]').count(); check(hl>0, "home page links to blog/ files: %d"%hl)

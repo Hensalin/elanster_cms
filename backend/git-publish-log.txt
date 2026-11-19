@@ -1,0 +1,24 @@
+Website: demooo (demooo) → Hensalin/elanster_website-demo [main]
+Articles in the CMS: 7 (7 published)
+article.html in the repo: yes (article design)
+
+Result: OK — 17 file(s) written to Hensalin/elanster_website-demo. Vercel is rebuilding the website.
+Way: design article.html
+Files written (17):
+  - index.html
+  - blog.html
+  - blog/the-hidden-cost-of-poor-cybersecurity-why-every-business-needs-a-strong-digital-defense.html
+  - article-the-hidden-cost-of-poor-cybersecurity-why-every-business-needs-a-strong-digital-defense.html
+  - blog/the-importance-of-digital-marketing-in-todays-world.html
+  - article-the-importance-of-digital-marketing-in-todays-world.html
+  - blog/artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life-2.html
+  - article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life-2.html
+  - blog/artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life.html
+  - article-artificial-intelligence-ai-transforming-the-future-of-technology-and-everyday-life.html
+  - blog/vibe-coding-technical-debt-what-happens-to-your-codebase-at-month-six.html
+  - article-vibe-coding-technical-debt-what-happens-to-your-codebase-at-month-six.html
+  - blog/how-much-does-it-cost-to-build-an-ai-product-a-real-breakdown.html
+  - article-how-much-does-it-cost-to-build-an-ai-product-a-real-breakdown.html
+  - blog/why-most-ai-products-fail-after-launch-and-what-production-ready-actually-means.html
+  - article-why-most-ai-products-fail-after-launch-and-what-production-ready-actually-means.html
+  - sitemap.xml

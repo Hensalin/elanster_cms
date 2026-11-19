@@ -20,7 +20,7 @@ await call("PUT", `/api/v1/admin/websites/${E}`, { gitRepo: ER });
 let r = await call("POST", `/api/v1/admin/websites/${E}/git`, { action: "publish" });
 ok(r.j.status === "OK", "publish: " + r.j.status);
 await exportRepo();
-ok(execSync("grep -l 'name=\"generator\" content=\"Elanster CMS\"' /tmp/elgit/article-*.html | wc -l").toString().trim() !== "0", "generated article pages carry the CMS tag");
+ok(execSync("grep -l 'name=\"generator\" content=\"Elanster CMS\"' /tmp/elgit/blog/*.html | wc -l").toString().trim() !== "0", "generated article pages carry the CMS tag");
 // Serve the published website and sync from it, twice. (A first sync brings in the site's own built-in articles, if the CMS lacks any.)
 q(`update websites set domain='http://localhost:3206' where id='${E}'`);
 await call("POST", `/api/v1/admin/websites/${E}/sync-pages`); await call("POST", `/api/v1/admin/websites/${E}/git`, { action: "publish" }); await exportRepo();
@@ -36,7 +36,7 @@ for (let i = 1; i <= 2; i++) {
   await exportRepo();
 }
 // Old generated pages without the tag (written before this fix) are recognised too.
-execSync("sed -i '/name=\"generator\" content=\"Elanster CMS\"/d' /tmp/elgit/article-*.html");
+execSync("sed -i '/name=\"generator\" content=\"Elanster CMS\"/d' /tmp/elgit/blog/*.html");
 r = await call("POST", `/api/v1/admin/websites/${E}/sync-pages`);
 ok(copies() === 0 && copyPages() === 0, `sync with untagged old pages: no copies (${copies()}, ${copyPages()})`);
 
@@ -56,7 +56,7 @@ ok(q(`select count(*) from blogs where id='keepC00000000000000000cc' and deleted
 ok(q(`select count(*) from blogs where id in ('copyA00000000000000000aa','copyB00000000000000000bb') and deleted_at is not null`) === "2", "copies are hidden, not erased");
 const files = await (await fetch(`${G}/__list?repo=${ER}`)).json();
 ok(!files.some((f) => f.startsWith(`article-article-${first}`) || f === `article-article-article-${first}.html`), "their files are gone from GitHub");
-ok(files.includes(`article-${first}.html`), "the real article's page is still there");
+ok(files.includes(`blog/${first}.html`), "the real article's page is still there");
 ok(r.j.copies.articles === 0, "nothing left to clean");
 
 q(`delete from blogs where id in ('copyA00000000000000000aa','copyB00000000000000000bb','keepC00000000000000000cc','copyD00000000000000000dd'); delete from pages where id='copyP00000000000000000pp'`);

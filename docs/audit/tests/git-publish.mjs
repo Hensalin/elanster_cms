@@ -47,8 +47,7 @@ ok(!/js\/blog\.js/.test(art), "the website script that would overwrite the artic
 ok(art.includes('id="articleApp"><a class="art__back"') && art.includes('<div class="art__body">'), "article written into the real design");
 ok(art.includes('"@type":"Article"') && /<title>[^<]+\| Elanster<\/title>/.test(art), "Google tags");
 ok(art.includes('href="../css/styles.css') && art.includes('class="nav__links"') && art.includes('href="../blog.html"') && !/\s(?:href|src)="(?:css|js|assets)\//.test(art), "same menu and styles as the website, with links fixed for the blog folder");
-{ const fw = await file(ER, "article-final-check-article.html");
-  ok(fw && fw.includes('url=blog/final-check-article.html') && fw.includes('name="robots" content="noindex"') && fw.includes('rel="canonical" href="https://www.elanster.com/blog/final-check-article.html"'), "the old address forwards to the new one");
+{ ok(!(await list(ER)).some((f) => /^article-.+\.html$/.test(f)), "no article-….html files in the main folder");
   const ix = await file(ER, "index.html");
   const liveSlugs = new Set(((await call(S, "GET", `/api/v1/admin/blogs?website=${E}&status=PUBLISHED`)).j?.items ?? []).map((b) => b.slug));
   const olds = [...ix.matchAll(/href="article\.html\?slug=([^"]+)"/g)].map((m) => m[1]);

@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { applyEdits } from "./htmledit";
 import { articleDir, rebuildLists, renderInFile } from "./sitearticles";
-import { ARTICLE_DIR, articlePath, forwardPage, hasArticleList, mediaIds, oldArticlePath, renderArticle, renderList, validSlug, type Article } from "./articlepage";
+import { ARTICLE_DIR, articlePath, hasArticleList, mediaIds, renderArticle, renderList, validSlug, type Article } from "./articlepage";
 import { blobSha, commitFiles, getHead, GitError, hasToken, readFile, validBranch, validRepo, type FileChange } from "./github";
 import { blogWithRelations } from "./blogs";
 import { livePublished, notDeleted, publicBlog } from "./public";
@@ -39,7 +39,7 @@ export function gitOnly(html: string): string {
   return out;
 }
 
-export type GitResult = { status: "OK" | "WARN" | "FAILED" | "SKIPPED"; message: string; files: number; commit?: string; warnings?: string[] };
+export type GitResult = { status: "OK" | "WARN" | "FAILED" | "SKIPPED"; message: string; files: number; commit?: string; warnings?: string[]; written?: string[]; mode?: string };
 const sha = (s: string) => blobSha(Buffer.from(s));
 
 type Plan = { changes: FileChange[]; state: Array<{ path: string; kind: string; original: string | null; lastSha: string }>; drop: string[]; warnings: string[]; touched: string[]; dir: string | null };
@@ -125,17 +125,10 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
       const buf = Buffer.from(html), h = blobSha(buf);
       P.state.push({ path, kind: "article", original: null, lastSha: h });
       if (st.get(path)?.lastSha !== h) { P.changes.push({ path, content: buf }); P.touched.push(path); }
-      // the older address forwards to the new one (old links and search results keep working)
-      const old = oldArticlePath(a.slug);
-      if (!pageFiles.has(old)) {
-        const fb = Buffer.from(forwardPage(a.slug, a.title, siteUrl)), fh = blobSha(fb);
-        P.state.push({ path: old, kind: "article", original: null, lastSha: fh });
-        if (st.get(old)?.lastSha !== fh) { P.changes.push({ path: old, content: fb }); P.touched.push(old); }
-      }
     }
   } else if (arts.length || rows.some((r) => r.kind === "article" || r.kind === "article-own")) {
     // B) Every article is its own file in a folder (We Are Zion: blogs/<slug>.html). Its own file is edited; a new article gets a copy of one.
-    const known = rows.find((r) => r.kind === "article" || r.kind === "article-own")?.path.split("/")[0] ?? null;
+    const known = rows.find((r) => (r.kind === "article" || r.kind === "article-own") && r.path.includes("/") && !r.path.startsWith(ARTICLE_DIR + "/"))?.path.split("/")[0] ?? null;
     const dir = known ?? articleDir([...pageOut.values()].map((x) => x.orig), new Set(arts.map((a) => a.slug)));
     P.dir = dir;
     if (!dir) { if (arts.length) P.warnings.push("No article files were found on this website (for example blogs/<name>.html), so articles were not written to Git"); }
@@ -245,9 +238,10 @@ export async function gitPublish(websiteId: string, opts: { force?: string[]; wh
         // Remember what is now in the repo (also when nothing changed: the first run records every page's untouched original).
         for (const s of P.state) await db.insert(schema.gitFiles).values({ websiteId, ...s }).onConflictDoUpdate({ target: [schema.gitFiles.websiteId, schema.gitFiles.path], set: { kind: s.kind, original: s.original, lastSha: s.lastSha, updatedAt: new Date() } });
         for (const d of P.drop) await db.delete(schema.gitFiles).where(and(eq(schema.gitFiles.websiteId, websiteId), eq(schema.gitFiles.path, d)));
+        const extra = { written: P.touched.slice(0, 200), mode: P.dir ? `folder ${P.dir}/` : "design article.html" };
         result = P.warnings.length
-          ? { status: "WARN", message: `${P.changes.length ? `${P.changes.length} file(s) written. ` : ""}${P.warnings.join(" · ")}`, files: P.changes.length, commit: P.changes.length ? commit : undefined, warnings: P.warnings }
-          : { status: "OK", message: P.changes.length ? `${P.changes.length} file(s) written to ${repo}. Vercel is rebuilding the website.` : "Nothing to change: the repo already matches.", files: P.changes.length, commit: P.changes.length ? commit : undefined };
+          ? { status: "WARN", message: `${P.changes.length ? `${P.changes.length} file(s) written. ` : ""}${P.warnings.join(" · ")}`, files: P.changes.length, commit: P.changes.length ? commit : undefined, warnings: P.warnings, ...extra }
+          : { status: "OK", message: P.changes.length ? `${P.changes.length} file(s) written to ${repo}. Vercel is rebuilding the website.` : "Nothing to change: the repo already matches.", files: P.changes.length, commit: P.changes.length ? commit : undefined, ...extra };
         break;
       } catch (e) {
         if (e instanceof GitError && e.status === 422 && /branch changed/i.test(e.message) && attempt < 1) continue;
