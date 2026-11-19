@@ -17,6 +17,7 @@ export async function websiteFromKey(req: Request) {
     .where(and(eq(schema.apiKeys.keyHash, hashKey(raw)), eq(schema.apiKeys.active, true),
       eq(schema.websites.active, true), isNull(schema.websites.deletedAt)));
   if (!row) return null;
-  void db.update(schema.apiKeys).set({ lastUsedAt: new Date() }).where(eq(schema.apiKeys.id, row.key.id));
+  // Awaited: on Vercel an unfinished update can be dropped after the response, so "last used" would never change.
+  await db.update(schema.apiKeys).set({ lastUsedAt: new Date() }).where(eq(schema.apiKeys.id, row.key.id)).catch(() => {});
   return row.site;
 }

@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowUp, ExternalLink, FileText, Link2, Newspaper, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Image as ImageIcon, ArrowDown, ArrowUp, ExternalLink, FileText, Link2, Newspaper, Plus, RefreshCw, Search, X } from "lucide-react";
 import { api, fmt, useToast } from "@/components/ui";
 import { useSite } from "@/components/site";
 import { BlogEditor } from "@/components/BlogEditor";
@@ -109,10 +109,10 @@ function ContentScreen() {
               {th("title", "Title")}{th("status", "Status")}{th("slug", "Slug")}{kind === "blogs" ? th("category", "Category") : th("website", "Website")}{kind === "blogs" ? th("author", "Author") : <th>Edits</th>}{th("updatedAt", "Updated")}<th><span className="sr-only">Quick actions</span></th></tr></thead>
               <tbody>{shown.map((r) => (<tr key={r.id} className={(open?.id === r.id ? "on " : "") + (sel.has(r.id) ? "picked" : "")} onClick={() => openRow(r)}>
                 <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.title}`} checked={sel.has(r.id)} onChange={() => toggle(r.id)} /></td>
-                <td><div className="title-cell">{kind === "blogs" && (r.img ? <img className="thumb" src={r.img} alt="" loading="lazy" /> : <span className="thumb thumb--none" aria-hidden />)}<button className="row-title" onClick={(e) => { e.stopPropagation(); openRow(r); }}>{r.title}</button></div></td>
-                <td><Chip r={r} /></td><td className="mut">/{r.slug.replace(/^\//, "")}</td>
+                <td><div className="title-cell">{kind === "blogs" && (r.img ? <img className="thumb" src={r.img} alt="" loading="lazy" /> : <span className="thumb thumb--none" aria-hidden><ImageIcon size={15} /></span>)}<button className="row-title" onClick={(e) => { e.stopPropagation(); openRow(r); }}>{r.title}</button></div></td>
+                <td><Chip r={r} /></td><td><div className="slug-cell" title={"/" + r.slug.replace(/^\//, "")}>/{r.slug.replace(/^\//, "")}</div></td>
                 <td>{kind === "blogs" ? (r.category || <span className="mut">—</span>) : r.website}</td><td>{kind === "blogs" ? (r.author || <span className="mut">—</span>) : <span className="mut">{r.note || "—"}</span>}</td>
-                <td className="mut">{fmt(r.updatedAt)}</td>
+                <td className="mut nowrap">{fmt(r.updatedAt)}</td>
                 <td className="row-act" onClick={(e) => e.stopPropagation()}>{r.status === "PUBLISHED" && !r.edited
                   ? <button className="btn sm" onClick={() => quick(r, "unpublish")}>Unpublish</button>
                   : <button className="btn sm orange" onClick={() => quick(r, "publish")}>{r.edited ? "Publish changes" : "Publish"}</button>}</td></tr>))}</tbody></table>}

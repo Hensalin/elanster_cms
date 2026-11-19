@@ -1,30 +1,39 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { CheckCircle2, CircleAlert, KeyRound, Link2, Plus, Power, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { api, fmt, useToast } from "@/components/ui";
 
 export default function Websites() {
   const [sites, setSites] = useState<any[] | null>(null); const [me, setMe] = useState<any>(null);
-  const [add, setAdd] = useState(false); const [keysFor, setKeysFor] = useState<any>(null);
+  const [add, setAdd] = useState(false); const [keysFor, setKeysFor] = useState<any>(null); const [checkFor, setCheckFor] = useState<any>(null);
   const { toast, el } = useToast();
   const load = useCallback(() => api("/api/v1/admin/websites").then(setSites).catch((e) => toast(e.message, true)), []); // eslint-disable-line
   useEffect(() => { load(); api("/api/v1/auth/me").then(setMe); }, [load]);
   const isSuper = me?.user.role === "SUPER_ADMIN";
   return (<>
     <div className="head"><div><h1>Websites</h1><p>Every website has its own content and its own API key.</p></div>
-      {isSuper && <button className="btn dark" onClick={() => setAdd(true)}>+ Add website</button>}</div>
-    {!sites ? <p>Loading…</p> : !sites.length ? <div className="empty">No websites yet.</div> :
-      <div className="card" style={{ padding: 0, overflowX: "auto" }}><table>
-        <thead><tr><th>Website</th><th>Domain</th><th>Published</th><th>Drafts</th><th>Status</th><th></th></tr></thead>
-        <tbody>{sites.map((s) => (<tr key={s.id}>
-          <td><b>{s.name}</b><br /><small style={{ color: "var(--muted)" }}>{s.slug}</small></td>
-          <td>{s.domain || "—"}</td><td>{s.published}</td><td>{s.drafts}</td>
-          <td><span className={"badge " + (s.active ? "PUBLISHED" : "UNPUBLISHED")}>{s.active ? "Connected" : "Disabled"}</span></td>
-          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{isSuper && <>
-            <button className="btn sm" onClick={async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast("Address saved"); load(); } catch (e) { toast((e as Error).message, true); } }}>Address</button>{" "}
-            <button className="btn sm" onClick={() => setKeysFor(s)}>API keys</button>{" "}
-            <button className="btn sm" onClick={async () => { try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website disabled" : "Website enabled"); load(); } catch (e) { toast((e as Error).message, true); } }}>{s.active ? "Disable" : "Enable"}</button></>}</td>
-        </tr>))}</tbody></table></div>}
+      {isSuper && <button className="btn dark" onClick={() => setAdd(true)}><Plus size={15} /> Add website</button>}</div>
+    {!sites ? <div className="skel" aria-busy="true"><div /><div /><div /></div> : !sites.length ? <div className="empty">No websites yet.</div> :
+      <div className="card tbl" style={{ padding: 0 }}><table>
+        <thead><tr><th>Website</th><th>Address</th><th className="num">Live</th><th className="num">Drafts</th><th>Connection</th><th><span className="sr-only">Actions</span></th></tr></thead>
+        <tbody>{sites.map((s) => {
+          const setAddress = async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast("Address saved"); load(); } catch (e) { toast((e as Error).message, true); } };
+          const toggle = async () => { try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website turned off" : "Website turned on"); load(); } catch (e) { toast((e as Error).message, true); } };
+          return (<tr key={s.id}>
+          <td><div className="site-cell"><span className={"site-ic" + (s.active ? " on" : "")} aria-hidden>{s.name.slice(0, 1)}</span><div><b>{s.name}</b><small>{s.slug}</small></div></div></td>
+          <td>{s.domain ? <a className="mut" href={s.domain} target="_blank" rel="noreferrer">{s.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a> : <span className="mut">Not set</span>}</td>
+          <td className="num">{s.published}</td><td className="num">{s.drafts}</td>
+          <td><Conn s={s} onCheck={() => setCheckFor(s)} /></td>
+          <td style={{ textAlign: "right" }}>{isSuper && <div className="acts">
+            <button className="icon-btn" title="Set website address" aria-label={`Set address for ${s.name}`} onClick={setAddress}><Link2 size={15} /></button>
+            <button className="icon-btn" title="API keys" aria-label={`API keys for ${s.name}`} onClick={() => setKeysFor(s)}><KeyRound size={15} /></button>
+            <button className="icon-btn" title="Check connection" aria-label={`Check connection for ${s.name}`} onClick={() => setCheckFor(s)}><RefreshCw size={15} /></button>
+            <button className="icon-btn" title={s.active ? "Turn off" : "Turn on"} aria-label={(s.active ? "Turn off " : "Turn on ") + s.name} onClick={toggle}><Power size={15} /></button>
+            <button className="icon-btn danger-ic" title="Remove website" aria-label={`Remove ${s.name}`} onClick={async () => { if (!confirm(`Remove “${s.name}” from the CMS? Its articles and pages are hidden with it.`)) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "DELETE" }); toast("Website removed"); load(); } catch (e) { toast((e as Error).message, true); } }}><Trash2 size={15} /></button>
+          </div>}</td>
+        </tr>); })}</tbody></table></div>}
     {add && <AddSite onClose={() => setAdd(false)} onDone={() => { setAdd(false); toast("Website added"); load(); }} />}
+    {checkFor && <CheckPanel site={checkFor} onClose={() => { setCheckFor(null); load(); }} />}
     {keysFor && <Keys site={keysFor} onClose={() => setKeysFor(null)} toast={toast} />}
     {el}
   </>);
@@ -57,5 +66,36 @@ function Keys({ site, onClose, toast }: { site: any; onClose: () => void; toast:
     {keys.map((k) => (<div className="row" key={k.id}><div><b>{k.label}</b> <code>{k.prefix}…</code><small>Created {fmt(k.createdAt)} · last used {fmt(k.lastUsedAt)}</small></div>
       {k.active ? <button className="btn sm danger" onClick={async () => { if (!confirm("Revoke this key? Websites using it will stop working.")) return; await api(`/api/v1/admin/websites/${site.id}/api-keys/${k.id}`, { method: "DELETE" }); load(); }}>Revoke</button> : <span className="badge UNPUBLISHED">Revoked</span>}</div>))}
     <div style={{ textAlign: "right", marginTop: 14 }}><button className="btn" onClick={onClose}>Close</button></div>
+  </div></div>);
+}
+
+const ago = (d: string) => { const m = Math.round((Date.now() - +new Date(d)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+
+/** Friendly connection status from the website's key use: connected / waiting / not connected / off. */
+function Conn({ s, onCheck }: { s: any; onCheck: () => void }) {
+  const fresh = s.lastSeen && Date.now() - +new Date(s.lastSeen) < 7 * 864e5;
+  const [cls, label, sub] = !s.active ? ["OFF", "Off", "Turned off in the CMS"]
+    : fresh ? ["PUBLISHED", "Connected", `Website read content ${ago(s.lastSeen)}`]
+    : s.keys > 0 ? ["IN_REVIEW", "Waiting for website", s.lastSeen ? `Last seen ${ago(s.lastSeen)}` : "Key made, not used yet"]
+    : ["OFF", "Not connected", "No key yet"];
+  return (<button className="conn" onClick={onCheck} title="Check connection"><span className={"badge " + cls}>{label}</span><small>{sub}</small></button>);
+}
+
+function CheckPanel({ site, onClose }: { site: any; onClose: () => void }) {
+  const [checks, setChecks] = useState<{ ok: boolean; label: string; hint?: string }[] | null>(null); const [err, setErr] = useState("");
+  const run = useCallback(() => { setChecks(null); setErr(""); api(`/api/v1/admin/websites/${site.id}/check`).then(setChecks).catch((e) => setErr(e.message)); }, [site.id]);
+  useEffect(() => { run(); }, [run]);
+  const must = checks?.filter((c) => !(c.hint ?? "").startsWith("Optional")) ?? [];
+  const allOk = !!checks && must.length > 0 && must.every((c) => c.ok);
+  return (<div className="modal" onClick={onClose}><div onClick={(e) => e.stopPropagation()} className="check-panel">
+    <div className={"check-hero " + (!checks ? "" : allOk ? "ok" : "bad")}>
+      {!checks ? <RefreshCw size={26} className="spin" /> : allOk ? <CheckCircle2 size={30} /> : <CircleAlert size={30} />}
+      <div><h2>{!checks ? "Checking the connection…" : allOk ? "Connected" : "Not connected yet"}</h2>
+        <p>{!checks ? `Opening ${site.domain || site.name} and testing its key.` : allOk ? `${site.name} is reading its articles and pages from this CMS. What you publish appears there.` : "Follow the first red step below, then check again."}</p></div></div>
+    {err && <p className="err-text">{err}</p>}
+    {checks && <ol className="checklist">{checks.map((c, i) => { const opt = (c.hint ?? "").startsWith("Optional");
+      return <li key={i} className={c.ok ? "ok" : opt ? "opt" : "bad"}>{c.ok ? <CheckCircle2 size={18} /> : opt ? <CircleAlert size={18} /> : <XCircle size={18} />}
+        <div><b>{c.label}</b>{!c.ok && c.hint && <small>{c.hint}</small>}</div></li>; })}</ol>}
+    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}><button className="btn" onClick={run} disabled={!checks}><RefreshCw size={14} /> Check again</button><button className="btn dark" onClick={onClose}>Done</button></div>
   </div></div>);
 }

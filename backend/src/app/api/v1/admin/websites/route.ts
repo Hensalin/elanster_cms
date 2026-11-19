@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, max } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { accessibleWebsiteIds } from "@/lib/auth";
@@ -11,7 +11,11 @@ export const GET = admin(async (_req, _c, user) => {
   const sites = await db.select().from(schema.websites).where(where).orderBy(schema.websites.name);
   const counts = await db.select({ websiteId: schema.blogs.websiteId, status: schema.blogs.status, n: count() })
     .from(schema.blogs).where(isNull(schema.blogs.deletedAt)).groupBy(schema.blogs.websiteId, schema.blogs.status);
+  const keys = await db.select({ websiteId: schema.apiKeys.websiteId, n: count(), lastSeen: max(schema.apiKeys.lastUsedAt) })
+    .from(schema.apiKeys).where(eq(schema.apiKeys.active, true)).groupBy(schema.apiKeys.websiteId);
   return json(sites.map((s) => ({
+    keys: keys.find((k) => k.websiteId === s.id)?.n ?? 0,
+    lastSeen: keys.find((k) => k.websiteId === s.id)?.lastSeen ?? null,
     ...s,
     published: counts.find((c) => c.websiteId === s.id && c.status === "PUBLISHED")?.n ?? 0,
     drafts: counts.filter((c) => c.websiteId === s.id && c.status !== "PUBLISHED").reduce((a, c) => a + c.n, 0),

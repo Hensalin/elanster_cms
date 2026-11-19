@@ -12,6 +12,7 @@ const security = [
 ];
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  devIndicators: false,
   async rewrites() { return [{ source: "/api/:path*", destination: `${BACKEND}/api/:path*` }, { source: "/preview/:path*", destination: `${BACKEND}/preview/:path*` }]; },
   async headers() { return [{ source: "/((?!api/).*)", headers: security }]; },
 };

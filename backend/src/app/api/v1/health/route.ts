@@ -15,5 +15,16 @@ export async function GET() {
   } else problem = "No database settings found. Add PGHOST, PGPORT, PGUSER, PGDATABASE and PGPASSWORD (or DATABASE_URL) for Production, then Redeploy.";
   let canConnect: boolean | string = "not tested";
   try { const { db } = await import("@/db"); const { sql } = await import("drizzle-orm"); await db.execute(sql`select 1`); canConnect = true; } catch (e) { canConnect = false; problem = problem || "Could not connect: " + ((e as { cause?: { code?: string; message?: string } }).cause?.code ?? (e as Error).message).toString().slice(0, 120); }
-  return NextResponse.json({ mode, host, port, sessionSecretSet: !!process.env.SESSION_SECRET, canConnect, problem: problem || null });
+  let missingTables: string[] = [];
+  if (canConnect === true) {
+    try {
+      const { db } = await import("@/db"); const { sql } = await import("drizzle-orm");
+      const need = ["users", "websites", "blogs", "pages", "media", "rate_limits", "content_versions"];
+      const r = await db.execute(sql`select table_name from information_schema.tables where table_schema = 'public'`);
+      const have = new Set((r.rows as { table_name: string }[]).map((x) => x.table_name));
+      missingTables = need.filter((t) => !have.has(t));
+      if (missingTables.length && !problem) problem = "Database update not applied. Run backend/SUPABASE-UPDATE.sql in Supabase (or npm run db:update).";
+    } catch { /* ignore */ }
+  }
+  return NextResponse.json({ mode, host, port, sessionSecretSet: !!process.env.SESSION_SECRET, canConnect, missingTables, problem: problem || null });
 }

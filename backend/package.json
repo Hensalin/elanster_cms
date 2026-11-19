@@ -11,7 +11,9 @@
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
     "db:seed": "tsx --env-file=.env scripts/seed.ts",
     "db:reset-admin": "tsx --env-file=.env scripts/reset-admin.ts",
-    "db:import-blogs": "tsx --env-file=.env scripts/import-site-blogs.ts"
+    "db:import-blogs": "tsx --env-file=.env scripts/import-site-blogs.ts",
+    "db:update": "node --env-file=.env.local scripts/db-update.mjs",
+    "db:set-password": "node --env-file=.env.local scripts/set-password.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
