@@ -605,3 +605,6 @@ body { background: var(--bg); }
 .checklist li b { font-weight: 600; font-size: 13.5px; display: block; } .checklist li small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .checklist li.bad { background: color-mix(in srgb, var(--red-bg) 70%, var(--soft)); }
 .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Article title: big and bold (the shorthand "font: … inherit" was ignored by browsers) */
+.qe-title { font-family: inherit !important; font-size: clamp(26px, 3vw, 36px) !important; font-weight: 750 !important; line-height: 1.15 !important; letter-spacing: -.02em; }

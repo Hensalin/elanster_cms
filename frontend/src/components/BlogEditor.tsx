@@ -64,6 +64,9 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
   }
   const primary = () => canPublish ? act("publish", status === "PUBLISHED" ? "Live article updated" : "Published — it is on your website now") : act("submit", "Sent for review");
 
+  // Grow the title box to fit long titles (also when an article is first opened).
+  useEffect(() => { const t = titleRef.current; if (t) { t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; } }, [f.title]);
+
   useEffect(() => { // Ctrl+S save · Ctrl+Enter publish · autosave drafts after 5 seconds · warn before leaving unsaved
     const k = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!locked) save(); }
@@ -72,7 +75,7 @@ export function BlogEditor({ id, embedded, onCreated, onBack, onChanged }: { id:
     const u = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("keydown", k); window.addEventListener("beforeunload", u);
     const t = dirty && !locked && status !== "PUBLISHED" && f.title.trim() ? setTimeout(() => { save(true); }, 5000) : undefined;
-    return () => { window.removeEventListener("keydown", k); window.removeEventListener("beforeunload", u); if (t) clearTimeout(t); };
+  return () => { window.removeEventListener("keydown", k); window.removeEventListener("beforeunload", u); if (t) clearTimeout(t); };
   }); // eslint-disable-line
 
   // Closing the panel never loses work: unsaved drafts are saved on the way out.

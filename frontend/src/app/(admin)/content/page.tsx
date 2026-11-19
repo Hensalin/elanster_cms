@@ -31,7 +31,7 @@ function ContentScreen() {
     setSyncing(true);
     try {
       const r = await api(`/api/v1/admin/websites/${t.id}/sync-pages`, { method: "POST" });
-      toast(`${r.pages.length} page${r.pages.length === 1 ? "" : "s"} found on ${t.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}` + (r.created ? ` · ${r.created} new` : "") + (r.removed ? ` · ${r.removed} removed` : "") + (r.untagged?.length ? ` · ${r.untagged.length} not editable yet` : ""));
+      toast(`${r.pages.length} page${r.pages.length === 1 ? "" : "s"} found on ${t.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}` + (r.created ? ` · ${r.created} new` : "") + (r.removed ? ` · ${r.removed} removed` : "") + (r.posts?.added ? ` · ${r.posts.added} article${r.posts.added === 1 ? "" : "s"} brought in` : "") + (r.posts?.filled ? ` · ${r.posts.filled} article${r.posts.filled === 1 ? "" : "s"} completed (photo/category)` : "") + (r.posts?.problems?.length ? ` · Problem: ${r.posts.problems[0]}` : "") + (r.untagged?.length ? ` · ${r.untagged.length} not editable yet` : ""));
       load();
     } catch (e) { if (!quiet) toast((e as Error).message, true); } finally { setSyncing(false); }
   };
@@ -57,7 +57,7 @@ function ContentScreen() {
   useEffect(() => { setRows(null); const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load]); // eslint-disable-line
   useEffect(() => { setSel(new Set()); setPage(1); }, [kind, site, q, status]);
   useEffect(() => {
-    const t = syncTarget(); if (kind !== "pages" || !rows || rows.length || !t || autoSynced.current.has(t.id)) return;
+    const t = syncTarget(); if (!rows || !t || autoSynced.current.has(t.id)) return;
     autoSynced.current.add(t.id); syncPages(true);
   }, [kind, rows, sites, site]); // eslint-disable-line
   // Links like /content?open=blogs:ID (from the Ctrl+K search) or /content?new=1
@@ -103,7 +103,7 @@ function ContentScreen() {
       <div className="list-head">
         <div><h1>{kind === "blogs" ? "Blog" : "Pages"}</h1><p>{kind === "blogs" ? "Write, review and publish articles. They appear on your website's Blog page." : "Every page of your live website, kept in sync. Edit text, links and images; the design stays exactly as it is."}</p></div>
         <div className="list-actions">
-          {kind === "pages" && <button className="btn dark" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Sync from website"}</button>}
+          {<button className="btn" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Sync from website"}</button>}
           {kind === "pages" && <button className="btn" onClick={() => router.push("/pages")}><Link2 size={15} /> Connection</button>}
           {kind === "blogs" && <button className="btn dark" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button>}
         </div>
@@ -120,8 +120,10 @@ function ContentScreen() {
         {!shown ? <div className="skel" aria-busy="true" aria-label="Loading">{[0, 1, 2, 3, 4].map((i) => <div key={i} />)}</div>
           : !shown.length ? <div className="empty-state"><div className="es-ic">{kind === "blogs" ? <Newspaper size={28} /> : <FileText size={28} />}</div>
             <h3>{q || status ? "Nothing matches" : kind === "blogs" ? "No articles yet" : "No pages yet"}</h3>
-            <p>{q || status ? "Try a different word or clear the filters." : kind === "blogs" ? "Write your first article. It stays a draft until you publish it." : syncing ? "Reading your website and bringing in every page…" : "Click below and the CMS reads your live website and brings in every page, like Framer."}</p>
-            {!q && !status && kind === "blogs" && <button className="btn orange" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button>}
+            <p>{q || status ? "Try a different word or clear the filters." : kind === "blogs" ? syncing ? "Reading your website and bringing in the articles it already shows…" : "Bring in the articles your website already shows, or write a new one." : syncing ? "Reading your website and bringing in every page…" : "Click below and the CMS reads your live website and brings in every page, like Framer."}</p>
+            {!q && !status && kind === "blogs" && <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              <button className="btn" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Bring in articles from website"}</button>
+              <button className="btn orange" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button></div>}
             {!q && !status && kind === "pages" && <button className="btn orange" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Bring in pages from website"}</button>}</div>
             : <table><thead><tr><th style={{ width: 34 }}><input type="checkbox" aria-label="Select all" checked={all} onChange={() => setSel(all ? new Set() : new Set(shown.map((r) => r.id)))} /></th>
               {th("title", "Title")}{th("status", "Status")}{th("slug", "Slug")}{kind === "blogs" ? th("category", "Category") : th("website", "Website")}{kind === "blogs" ? th("author", "Author") : <th>Edits</th>}{th("updatedAt", "Updated")}<th><span className="sr-only">Quick actions</span></th></tr></thead>

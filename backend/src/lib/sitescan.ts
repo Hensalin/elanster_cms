@@ -51,6 +51,82 @@ function readPage(path: string, html: string) {
   return { page: { slug, title: slug === "home" ? "Home" : name, file: path === "/" ? "index.html" : path.replace(/^\//, ""), fields } as ScanPage, global, tagged: seen.size };
 }
 
+type FoundPost = { slug: string; title: string; excerpt: string; category?: { name: string; slug: string }; image?: string; alt?: string; date?: string };
+const COLORS: Record<string, string> = { "ai-strategy": "orange", "ai-economics": "blue", "ai-engineering": "lime" };
+
+/** Finds the blog articles a website already shows: schema.org BlogPosting data, or the article list in its blog script. */
+export async function findPosts(base: string, htmls: string[]): Promise<FoundPost[]> {
+  const posts = new Map<string, FoundPost>();
+  const slugify = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 120);
+  // 1) schema.org BlogPosting / Article blocks
+  for (const html of htmls) for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const walk = (n: unknown): void => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) { n.forEach(walk); return; }
+        const o = n as Record<string, any>; const t = ([] as string[]).concat(o["@type"] ?? []);
+        if (t.some((x) => /BlogPosting|Article|NewsArticle/.test(x)) && o.headline) {
+          const url = String(o.url ?? o["@id"] ?? ""); const slug = url.match(/[?&]slug=([^&#]+)/)?.[1] ?? slugify(String(o.headline));
+          posts.set(slug, { slug, title: String(o.headline), excerpt: String(o.description ?? ""), image: typeof o.image === "string" ? o.image : o.image?.url, date: o.datePublished });
+        }
+        Object.values(o).forEach(walk); };
+      walk(JSON.parse(m[1]));
+    } catch { /* not valid JSON */ }
+  }
+  // 2) The article list inside the site's blog script (e.g. js/blog.js)
+  const srcs = new Set<string>(); for (const html of htmls) for (const m of html.matchAll(/<script[^>]+src="([^"]*blog[^"]*\.js[^"]*)"/gi)) srcs.add(new URL(m[1], base + "/").toString());
+  for (const src of srcs) {
+    const js = await get(src); if (!js) continue;
+    for (const m of js.matchAll(/\{\s*slug:\s*"([^"]+)",\s*title:\s*"([^"]+)"((?:[^{}]|\{[^{}]*\})*)\}/g)) {
+      const [, slug, title, rest] = m;
+      const pick = (k: string) => rest.match(new RegExp(k + ':\\s*"([^"]*)"'))?.[1];
+      const cat = rest.match(/category:\s*\{\s*name:\s*"([^"]+)",\s*slug:\s*"([^"]+)"/);
+      const fromJs: FoundPost = { slug, title, excerpt: pick("excerpt") ?? "", image: pick("image"), alt: pick("alt"), category: cat ? { name: cat[1], slug: cat[2] } : undefined };
+      // The same article can be described twice (structured data + script): combine them, filling any gaps.
+      const sameTitle = [...posts.values()].find((p) => p.title.toLowerCase() === title.toLowerCase());
+      const prev = posts.get(slug) ?? sameTitle;
+      if (prev) posts.delete(prev.slug);
+      posts.set(slug, prev ? { ...fromJs, title: prev.title || title, excerpt: prev.excerpt || fromJs.excerpt, image: prev.image || fromJs.image,
+        alt: prev.alt || fromJs.alt, category: prev.category || fromJs.category, date: prev.date } : fromJs);
+    }
+  }
+  return [...posts.values()].slice(0, 50);
+}
+
+/** Adds articles the website already shows but the CMS does not have yet (as live articles, with their photo). */
+export async function importPosts(websiteId: string, base: string, htmls: string[], userId: string | null) {
+  const found = await findPosts(base, htmls); let added = 0, filled = 0; const problems: string[] = [];
+  for (const p of found) { try {
+    const [ex] = await db.select().from(schema.blogs).where(and(eq(schema.blogs.websiteId, websiteId), eq(schema.blogs.slug, p.slug)));
+    // Already in the CMS: the CMS copy wins; only empty details (category, photo, summary) are filled in.
+    if (ex && ex.categoryId && ex.featuredImageId && ex.excerpt) continue;
+    let categoryId: string | null = null;
+    if (p.category && !ex?.categoryId) {
+      const [c] = await db.select().from(schema.categories).where(and(eq(schema.categories.websiteId, websiteId), eq(schema.categories.slug, p.category.slug)));
+      categoryId = c?.id ?? (await db.insert(schema.categories).values({ websiteId, name: p.category.name, slug: p.category.slug, color: COLORS[p.category.slug] ?? "" }).returning())[0].id;
+    }
+    let featuredImageId: string | null = null;
+    if (p.image && !ex?.featuredImageId) {
+      try {
+        const r = await fetch(new URL(p.image, base + "/").toString(), { signal: AbortSignal.timeout(12000) });
+        const type = r.headers.get("content-type") ?? "";
+        if (r.ok && type.startsWith("image/")) {
+          const buf = Buffer.from(await r.arrayBuffer());
+          if (buf.length < 8_000_000) featuredImageId = (await db.insert(schema.media).values({ websiteId, filename: p.slug.slice(0, 60) + ".jpg", originalName: p.slug.slice(0, 60) + ".jpg",
+            mimeType: type.split(";")[0], size: buf.length, altText: p.alt ?? p.title, folder: "blog", data: buf }).returning())[0].id;
+        }
+      } catch (e) { problems.push(`photo for “${p.title.slice(0, 40)}”: ${(e as Error).message}`); }
+    }
+    if (ex) {
+      await db.update(schema.blogs).set({ categoryId: ex.categoryId ?? categoryId, featuredImageId: ex.featuredImageId ?? featuredImageId, excerpt: ex.excerpt || p.excerpt }).where(eq(schema.blogs.id, ex.id));
+      filled++; continue;
+    }
+    const when = p.date && !isNaN(+new Date(p.date)) ? new Date(p.date) : new Date();
+    await db.insert(schema.blogs).values({ websiteId, title: p.title, slug: p.slug, excerpt: p.excerpt, content: "", status: "PUBLISHED", publishedAt: when,
+      authorId: userId, categoryId, featuredImageId });
+    added++;
+  } catch (e) { problems.push(`“${p.title.slice(0, 40)}”: ${(e as Error).message}`); } }
+  return { found: found.length, added, filled, problems };
+}
+
 /** Framer-style sync: whatever pages the live website has now appear in the CMS. Edits already made are kept. */
 export async function syncPages(websiteId: string, userId: string | null) {
   const [site] = await db.select().from(schema.websites).where(eq(schema.websites.id, websiteId));
@@ -61,13 +137,13 @@ export async function syncPages(websiteId: string, userId: string | null) {
   if (!home) throw new Error(`Could not open ${base}. Check the address and that the site is online.`);
 
   // 1) The site's own scan file, when it has a valid one. 2) Otherwise read the pages directly.
-  let manifest: Manifest | null = null; let source: "manifest" | "scan" = "scan"; const untagged: string[] = [];
+  let manifest: Manifest | null = null; let source: "manifest" | "scan" = "scan"; const untagged: string[] = []; const htmls: string[] = [home];
   const mf = await get(base + "/cms-manifest.json");
   if (mf) { try { const p = manifestSchema.safeParse(JSON.parse(mf)); if (p.success) { manifest = p.data; source = "manifest"; } } catch { /* not JSON */ } }
   if (!manifest) {
     const pages: ScanPage[] = []; const glob = new Map<string, PageField>();
     for (const path of await findPages(base, home)) {
-      const html = path === "/" ? home : await get(base + path); if (!html) continue;
+      const html = path === "/" ? home : await get(base + path); if (!html) continue; if (path !== "/") htmls.push(html);
       const r = readPage(path, html); if (pages.some((p) => p.slug === r.page.slug)) continue;
       pages.push(r.page); r.global.forEach((g) => { if (!glob.has(g.key)) glob.set(g.key, g); });
       if (!r.tagged) untagged.push(r.page.slug);
@@ -90,10 +166,13 @@ export async function syncPages(websiteId: string, userId: string | null) {
       updated++;
     }
   }
+  // Articles the website already shows come in too (only ones the CMS does not have yet).
+  if (source === "manifest") for (const p of await findPages(base, home)) { if (/blog|insight|news|article/i.test(p)) { const h = await get(base + p); if (h) htmls.push(h); } }
+  const posts = await importPosts(websiteId, base, htmls, userId).catch((e) => ({ found: 0, added: 0, filled: 0, problems: [(e as Error).message] }));
   // Pages that are no longer on the website are hidden (they come back if the page returns).
   const removed = (await db.update(schema.pages).set({ deletedAt: new Date() })
     .where(and(eq(schema.pages.websiteId, websiteId), isNull(schema.pages.deletedAt), notInArray(schema.pages.slug, list.map((p) => p.slug)))).returning({ id: schema.pages.id })).length;
   await db.insert(schema.activityLogs).values({ userId, websiteId, action: "PAGES_IMPORT", entity: "page", entityId: websiteId,
-    summary: `Synced pages from ${base} (${created} new, ${updated} refreshed${removed ? `, ${removed} removed` : ""})` });
-  return { source, created, updated, removed, pages: list.map((p) => ({ slug: p.slug, title: p.title, fields: p.fields.length })), untagged };
+    summary: `Synced from ${base}: ${list.length} pages (${created} new${removed ? `, ${removed} removed` : ""})${posts.added ? `, ${posts.added} articles brought in` : ""}` });
+  return { source, created, updated, removed, posts, pages: list.map((p) => ({ slug: p.slug, title: p.title, fields: p.fields.length })), untagged };
 }

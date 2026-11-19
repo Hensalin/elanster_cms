@@ -36,7 +36,8 @@ export function publicBlog(b: BlogFull, origin: string, withContent: boolean) {
     m ? { url: `${origin}/api/v1/media/${m.id}`, alt: m.altText } : null;
   return {
     id: b.id, title: b.title, slug: b.slug, excerpt: b.excerpt,
-    ...(withContent ? { content: b.content } : {}),
+    // Pictures inside the text always point at this CMS's public address (never "localhost" or the website's own address).
+    ...(withContent ? { content: b.content.replace(/(\ssrc=["'])(?:https?:\/\/[^"'\s]*?)?\/api\/v1\/media\//gi, `$1${origin}/api/v1/media/`) } : {}),
     publishedAt: b.publishedAt, updatedAt: b.updatedAt,
     author: b.author?.name ?? null,
     category: b.category ? { name: b.category.name, slug: b.category.slug } : null,
