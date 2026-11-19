@@ -7,8 +7,8 @@ import { api, fmt, Status, useToast } from "@/components/ui";
 import { useSite } from "@/components/site";
 
 type Level = "super" | "admin" | "editor";
-type Stats = { level: Level; websites: number; published: number; drafts: number; review: number; pages: number; users: number;
-  reviewQueue: any[]; pendingUsers: number; changesRequested: { id: string; title: string; reviewNote: string }[]; myDrafts: any[]; myReview: any[]; recentUpdated: any[]; recentPublished: any[]; activity: any[] };
+type Stats = { level: Level; websites: number; published: number; drafts: number; review: number; pages: number; users: number; pageStats: { live: number; changed: number; waiting: number };
+  reviewQueue: any[]; pendingUsers: number; changesRequested: { id: string; title: string; reviewNote: string; href: string }[]; myDrafts: any[]; myReview: any[]; recentUpdated: any[]; recentPublished: any[]; activity: any[] };
 
 const INTRO: Record<Level, { title: string; text: string; chip: string }> = {
   super: { title: "Dashboard", chip: "Super Admin", text: "Everything across every website: people, publishing and activity." },
@@ -61,12 +61,12 @@ export default function Dashboard() {
     try { await api(`/api/v1/admin/blogs/${id}/publish`, { method: "POST", body: { action } }); toast(action === "publish" ? "Published" : "Sent back to draft"); load(); } catch (e) { toast((e as Error).message, true); }
   };
   const list = (rows: any[], empty: string, date: "updatedAt" | "publishedAt", extra?: (b: any) => React.ReactNode) => rows.length ? rows.map((b) => (
-    <div className="row" key={b.id}><div><Link href={`/content?open=blogs:${b.id}`}><b>{b.title}</b></Link><small>{b.website?.name}{b.author?.name ? ` · ${b.author.name}` : ""} · {fmt(b[date])}</small></div>{extra ? extra(b) : <Status s={b.status} />}</div>
+    <div className="row" key={b.kind + b.id}><div><Link href={b.href ?? `/content?open=blogs:${b.id}`}><b>{b.title}</b></Link><small>{b.website?.name}{b.author?.name ? ` · ${b.author.name}` : ""} · {fmt(b[date])}</small></div>{extra ? extra(b) : <Status s={b.status} />}</div>
   )) : <div className="empty-art">{empty.startsWith("All caught up") ? <CaughtUpArt /> : <QuietArt />}<p>{empty}</p></div>;
   const stats: [string, number, React.ReactNode][] = s.level === "super"
     ? [["Websites", s.websites, <Globe2 size={16} key="a" />], ["People", s.users, <Users size={16} key="b" />], ["Live articles", s.published, <FileText size={16} key="c" />], ["Waiting for review", s.review, <ShieldCheck size={16} key="d" />], ["Pages", s.pages, <FileText size={16} key="e" />]]
     : s.level === "admin"
-    ? [["Waiting for review", s.review, <ShieldCheck size={16} key="d" />], ["Live articles", s.published, <FileText size={16} key="c" />], ["Drafts", s.drafts, <FilePlus2 size={16} key="f" />], ["Pages", s.pages, <FileText size={16} key="e" />]]
+    ? [["Waiting for review", s.review, <ShieldCheck size={16} key="d" />], ["Live articles", s.published, <FileText size={16} key="c" />], ["Article drafts", s.drafts, <FilePlus2 size={16} key="f" />], ["Pages with changes", s.pageStats.changed, <FileText size={16} key="e" />]]
     : [["My drafts", s.myDrafts.length, <FilePlus2 size={16} key="f" />], ["In review", s.myReview.length, <ShieldCheck size={16} key="d" />], ["Pages I can edit", s.pages, <FileText size={16} key="e" />]];
   return (<div className="dash">
     <section className="hero2">
@@ -84,19 +84,19 @@ export default function Dashboard() {
           : <Link className="feat-i" href="/websites"><LiveArt /><b>Your websites</b><small>Addresses and connections</small></Link>}
       </div>
     </section>
-    {s.level === "editor" && s.changesRequested.map((b) => <div className="note-banner" key={b.id} role="note"><b>Changes requested on “{b.title}”:</b> {b.reviewNote}<Link className="btn sm" href={`/content?open=blogs:${b.id}`}>Open article</Link></div>)}
+    {s.changesRequested.map((b) => <div className="note-banner" key={b.href} role="note"><b>Changes requested on “{b.title}”:</b> {b.reviewNote}<Link className="btn sm" href={b.href}>Open</Link></div>)}
     {s.level !== "super" && s.websites === 0 && <div className="note-banner" role="note"><b>You have no website to work on yet.</b> Ask your Super Admin to tick a website for you under Users.</div>}
     {s.level === "super" && s.pendingUsers > 0 && <div className="note-banner" role="note"><b>{s.pendingUsers} account{s.pendingUsers > 1 ? "s" : ""} waiting for approval.</b><Link className="btn sm" href="/users">Review</Link></div>}
     {s.level === "editor" ? <div className="bento">
-      <div className="card s4"><h2>My drafts</h2>{list(s.myDrafts, "No drafts. Start a new article or open a page from Content.", "updatedAt")}</div>
-      <div className="card s4"><h2>Sent for review</h2>{list(s.myReview, "Nothing is waiting. After you send an article for review, it shows here until an admin publishes it.", "updatedAt")}</div>
+      <div className="card s4"><h2>My drafts</h2>{list(s.myDrafts, "No drafts. Start a new article or open a page from Content.", "updatedAt", (b) => <Link className="btn sm" href={b.href}>Continue</Link>)}</div>
+      <div className="card s4"><h2>Sent for review</h2>{list(s.myReview, "Nothing is waiting. After you send an article or page for review, it shows here until an admin publishes it.", "updatedAt")}</div>
       <div className="card s4"><h2>Recently published</h2>{list(s.recentPublished, "Nothing published yet.", "publishedAt")}</div></div>
     : <div className="bento">
       <div className="card s4"><div className="card-h"><h2>Needs your review {s.review > 0 && <span className="count-pill">{s.review}</span>}</h2><Link className="linkish" href="/content">See all</Link></div>
-        {list(s.reviewQueue.slice(0, 3), "All caught up. Nothing is waiting for review.", "updatedAt", (b) => <button className="btn sm orange" disabled={!canPub} onClick={() => act(b.id, "publish")}>Publish</button>)}</div>
+        {list(s.reviewQueue.slice(0, 3), "All caught up. Nothing is waiting for review.", "updatedAt", (b) => b.kind === "page" ? <Link className="btn sm orange" href={b.href}>Review</Link> : <button className="btn sm orange" disabled={!canPub} onClick={() => act(b.id, "publish")}>Publish</button>)}</div>
       <div className="card s4"><div className="card-h"><h2>Recently published</h2><Link className="linkish" href="/content">See all</Link></div>
         {list(s.recentPublished.slice(0, 3), "Nothing published yet.", "publishedAt", (b) => <button className="btn sm" onClick={() => act(b.id, "unpublish")}>Unpublish</button>)}</div>
-      <WeekCard items={[...s.recentPublished.map((b: any) => ({ id: b.id, title: b.title, when: b.publishedAt, kind: "Published" })), ...s.reviewQueue.map((b: any) => ({ id: b.id, title: b.title, when: b.updatedAt, kind: "Sent for review" }))].filter((x) => x.when).sort((x, y) => +new Date(y.when) - +new Date(x.when))} />
+      <WeekCard items={[...s.recentPublished.map((b: any) => ({ id: b.id, title: b.title, when: b.publishedAt, kind: "Published" })), ...s.reviewQueue.map((b: any) => ({ id: b.kind + b.id, title: b.title, when: b.updatedAt, kind: "Sent for review" }))].filter((x) => x.when).sort((x, y) => +new Date(y.when) - +new Date(x.when))} />
       <div className="card s5"><div className="card-h"><h2>{s.level === "super" ? "Recent activity" : "Activity on your websites"}</h2><Link className="linkish" href="/activity">Open log</Link></div>
         {s.activity.length ? <ul className="feed">{s.activity.slice(0, 4).map((a) => <li key={a.id}><span className="feed-av" aria-hidden>{(a.user?.name ?? "S").slice(0, 1)}</span>
           <span className="feed-t">{a.summary}<small>{a.user?.name ?? "System"}</small></span><span className="feed-d">{fmt(a.createdAt)}</span></li>)}</ul>

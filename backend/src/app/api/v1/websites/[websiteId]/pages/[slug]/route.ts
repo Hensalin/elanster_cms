@@ -14,6 +14,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ websiteI
   if (!p) return pubError("Page not found", 404);
   const c = readContent(p.content);
   // "original" is the wording each text has on the website, so the website script can find texts that carry no data-cms marker.
-  return pub({ slug: p.slug, title: p.title, publishedAt: p.publishedAt, fields: c.published,
+  // Pictures chosen in the CMS always point at this CMS's public address (never "localhost").
+  const origin = new URL(req.url).origin;
+  const fields = Object.fromEntries(Object.entries(c.published).map(([k, v]) => [k, v.replace(/^(?:https?:\/\/[^/]+)?\/api\/v1\/media\//, `${origin}/api/v1/media/`)]));
+  return pub({ slug: p.slug, title: p.title, publishedAt: p.publishedAt, fields,
     original: Object.fromEntries(c.fields.map((f) => [f.key, f.text])) });
 }

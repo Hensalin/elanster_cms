@@ -7,12 +7,14 @@ import { useSite } from "@/components/site";
 import { BlogEditor } from "@/components/BlogEditor";
 
 type Kind = "pages" | "blogs";
-type Row = { id: string; title: string; slug: string; status: string; website: string; category: string; author: string; updatedAt: string; edited: boolean; note: string; img?: string; changes?: boolean };
+type Row = { id: string; title: string; slug: string; status: string; website: string; websiteId: string; category: string; author: string; updatedAt: string; edited: boolean; note: string; img?: string; changes?: boolean; review?: string; kind?: string };
 type Sort = { key: keyof Row; dir: 1 | -1 };
 
 const LABEL: Record<string, string> = { DRAFT: "Draft", IN_REVIEW: "In review", SCHEDULED: "Scheduled", PUBLISHED: "Live", UNPUBLISHED: "Unpublished" };
-const Chip = ({ r }: { r: Row }) => r.changes && r.status === "DRAFT" ? <span className="badge UNPUBLISHED" title="An admin asked for changes">Changes requested</span> : r.edited
-  ? <span className="badge SCHEDULED" title="Has changes that are not live yet">Edited</span>
+const Chip = ({ r }: { r: Row }) => r.review === "WAITING" ? <span className="badge IN_REVIEW" title="Sent for review, waiting for an admin">Waiting for review</span>
+  : (r.changes && r.status === "DRAFT") || r.review === "CHANGES" ? <span className="badge UNPUBLISHED" title="An admin asked for changes">Changes requested</span>
+  : r.edited ? <span className="badge SCHEDULED" title="Has saved changes that are not live yet">{r.status === "PUBLISHED" ? "Live · unpublished changes" : "Draft changes"}</span>
+  : r.kind === "page" && r.status !== "PUBLISHED" ? <span className="badge UNPUBLISHED" title="The website shows its own text">No changes</span>
   : <span className={"badge " + r.status}>{LABEL[r.status] ?? r.status}</span>;
 
 function ContentScreen() {
@@ -23,6 +25,10 @@ function ContentScreen() {
   const [page, setPage] = useState(1); const [pages, setPages] = useState(1); const [busy, setBusy] = useState(false);
   const loadSeq = useRef(0); const [syncing, setSyncing] = useState(false); const autoSynced = useRef<Set<string>>(new Set());
   const [sites, setSites] = useState<any[]>([]);
+  // Who may publish where (the server checks again on every action).
+  const [roles, setRoles] = useState<{ sup: boolean; map: Record<string, string> }>({ sup: false, map: {} });
+  useEffect(() => { api("/api/v1/auth/me").then((m) => setRoles({ sup: m.user.role === "SUPER_ADMIN", map: m.websiteRoles ?? {} })).catch(() => {}); }, []);
+  const canPub = (websiteId: string) => roles.sup || roles.map[websiteId] === "WEBSITE_ADMIN";
   useEffect(() => { api<any[]>("/api/v1/admin/websites").then(setSites).catch(() => {}); }, []);
   const syncTarget = () => (site ? sites.find((x) => x.id === site) : sites.filter((x) => x.active && x.domain).length === 1 ? sites.find((x) => x.active && x.domain) : null) ?? null;
   /** Framer-style: read the live website and bring in all its pages. */
@@ -44,12 +50,12 @@ function ContentScreen() {
       if (seq !== loadSeq.current) return;
       setCounts({ pages: pg.length, blogs: bl.total });
       if (kind === "pages") {
-        setRows(pg.map((p: any): Row => ({ id: p.id, title: p.title, slug: p.slug, status: p.status, website: p.website?.name ?? "", category: "", author: "", updatedAt: p.updatedAt,
-          edited: p.status === "PUBLISHED" && p.unpublished, note: p.fieldCount ? `${p.editedCount} of ${p.fieldCount} edited` : "" }))); setPages(1);
+        setRows(pg.map((p: any): Row => ({ id: p.id, title: p.title, slug: p.slug, status: p.status, website: p.website?.name ?? "", websiteId: p.websiteId, category: "", author: "", updatedAt: p.updatedAt,
+          edited: p.unpublished, review: p.reviewState, kind: "page", note: p.fieldCount ? `${p.editedCount} of ${p.fieldCount} texts edited` : "" }))); setPages(1);
       } else {
         const p = new URLSearchParams({ limit: "20", page: String(page) }); if (site) p.set("website", site); if (q) p.set("q", q); if (status) p.set("status", status);
         const d = await api("/api/v1/admin/blogs?" + p); if (seq !== loadSeq.current) return;
-        setRows(d.items.map((b: any): Row => ({ id: b.id, title: b.title, slug: b.slug, status: b.status, website: b.website?.name ?? "", category: b.category?.name ?? "", author: b.author?.name ?? "", updatedAt: b.updatedAt, edited: false, note: "", img: b.featuredImage?.id ? `/api/v1/media/${b.featuredImage.id}` : (b.featuredImageId ? `/api/v1/media/${b.featuredImageId}` : ""), changes: !!b.reviewNote })));
+        setRows(d.items.map((b: any): Row => ({ id: b.id, title: b.title, slug: b.slug, status: b.status, website: b.website?.name ?? "", websiteId: b.websiteId, category: b.category?.name ?? "", author: b.author?.name ?? "", updatedAt: b.updatedAt, edited: false, note: "", img: b.featuredImage?.id ? `/api/v1/media/${b.featuredImage.id}` : (b.featuredImageId ? `/api/v1/media/${b.featuredImageId}` : ""), changes: !!b.reviewNote })));
         setPages(d.pages);
       }
     } catch (e) { setRows([]); toast((e as Error).message, true); }
@@ -114,7 +120,9 @@ function ContentScreen() {
         <button className="icon-btn" onClick={() => { setRows(null); load(); }} aria-label="Refresh list" title="Refresh"><RefreshCw size={15} /></button>
       </div>
       {sel.size > 0 && <div className="bulk" role="region" aria-label="Selected items"><b>{sel.size} selected</b>
-        <button className="btn sm" disabled={busy} onClick={() => bulk("publish")}>Publish</button><button className="btn sm" disabled={busy} onClick={() => bulk("unpublish")}>Unpublish</button>
+        {(rows ?? []).filter((r) => sel.has(r.id)).every((r) => canPub(r.websiteId))
+          ? <><button className="btn sm" disabled={busy} onClick={() => bulk("publish")}>Publish</button><button className="btn sm" disabled={busy} onClick={() => bulk("unpublish")}>Unpublish</button></>
+          : <span className="mut">Only a Website Admin can publish.</span>}
         {kind === "blogs" && <button className="btn sm danger" disabled={busy} onClick={() => bulk("delete")}>Delete</button>}<button className="btn sm" onClick={() => setSel(new Set())}>Clear</button></div>}
       <div className="card tbl">
         {!shown ? <div className="skel" aria-busy="true" aria-label="Loading">{[0, 1, 2, 3, 4].map((i) => <div key={i} />)}</div>
@@ -133,9 +141,11 @@ function ContentScreen() {
                 <td><Chip r={r} /></td>{!site && kind === "blogs" ? <td className="mut">{r.website}</td> : <td><div className="slug-cell" title={"/" + r.slug.replace(/^\//, "")}>/{r.slug.replace(/^\//, "")}</div></td>}
                 <td>{kind === "blogs" ? (r.category || <span className="mut">—</span>) : r.website}</td><td>{kind === "blogs" ? (r.author || <span className="mut">—</span>) : <span className="mut">{r.note || "—"}</span>}</td>
                 <td className="mut nowrap">{fmt(r.updatedAt)}</td>
-                <td className="row-act" onClick={(e) => e.stopPropagation()}>{r.status === "PUBLISHED" && !r.edited
-                  ? <button className="btn sm" onClick={() => quick(r, "unpublish")}>Unpublish</button>
-                  : <button className="btn sm orange" onClick={() => quick(r, "publish")}>{r.edited ? "Publish changes" : "Publish"}</button>}</td></tr>))}</tbody></table>}
+                <td className="row-act" onClick={(e) => e.stopPropagation()}>{!canPub(r.websiteId) ? <button className="btn sm" onClick={() => openRow(r)}>{r.review === "WAITING" || r.status === "IN_REVIEW" ? "View" : "Edit"}</button>
+                  : r.review === "WAITING" || r.status === "IN_REVIEW" ? <button className="btn sm orange" onClick={() => openRow(r)}>Review</button>
+                  : r.kind === "page" && !r.edited ? <button className="btn sm" onClick={() => openRow(r)}>Edit</button>
+                  : r.status === "PUBLISHED" && !r.edited ? <button className="btn sm" onClick={() => quick(r, "unpublish")}>Unpublish</button>
+                  : <button className="btn sm orange" onClick={() => quick(r, "publish")}>{r.edited && r.status === "PUBLISHED" ? "Publish changes" : "Publish"}</button>}</td></tr>))}</tbody></table>}
       </div>
       {kind === "blogs" && pages > 1 && <div className="pager"><button className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page} of {pages}</span><button className="btn sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button></div>}
     </section>

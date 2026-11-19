@@ -14,6 +14,7 @@ export const GET = admin(async (req, _c, user) => {
   return json(rows.map((p) => {
     const c = readContent(p.content);
     return { id: p.id, websiteId: p.websiteId, website: p.website, title: p.title, slug: p.slug, status: p.status, publishedAt: p.publishedAt, updatedAt: p.updatedAt,
-      fieldCount: c.fields.length, editedCount: Object.keys(c.draft).length, unpublished: hasUnpublished(c) };
+      fieldCount: c.fields.length, editedCount: Object.keys(c.draft).length, unpublished: hasUnpublished(c),
+      reviewState: p.reviewState, reviewNote: p.reviewNote };
   }));
 });

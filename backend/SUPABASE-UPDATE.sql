@@ -30,3 +30,11 @@ UPDATE blog_categories SET color = 'lime'   WHERE slug = 'ai-engineering' AND co
 -- Remove the duplicate "Why Most AI Products Fail..." draft (the copy whose address ends in -2)
 UPDATE blogs SET deleted_at = now(), status = 'UNPUBLISHED'
 WHERE slug LIKE 'why-most-ai-products-fail-after-launch-and-what-production-ready-actually-means-2' AND deleted_at IS NULL;
+
+-- Review of page changes (editor sends, admin publishes or sends back)
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS review_state text NOT NULL DEFAULT '';
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS review_note text NOT NULL DEFAULT '';
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS review_by text REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS review_at timestamptz;
+CREATE INDEX IF NOT EXISTS pages_review ON pages (website_id, review_state);
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS edited_by text REFERENCES users(id) ON DELETE SET NULL;

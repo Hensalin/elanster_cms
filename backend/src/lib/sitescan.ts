@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { manifestSchema, readContent, writeContent, type PageField } from "./pagecontent";
 import { cleanHtml } from "./sanitize";
+import { findImages, findTexts, kindOf, textHash } from "./pagetexts";
 
 type Manifest = z.infer<typeof manifestSchema>;
 type ScanPage = Manifest["pages"][number];
@@ -54,27 +54,13 @@ function readPage(path: string, html: string) {
   return { page: { slug, title: slug === "home" ? "Home" : name, file: path === "/" ? "index.html" : path.replace(/^\//, ""), fields } as ScanPage, global, tagged: seen.size };
 }
 
-/* Pages without data-cms markers: the CMS picks the texts itself. Each text gets a key made from its wording,
-   so the website needs no changes — the CMS script finds the text on the live page by that original wording. */
-const TAGS = "h1|h2|h3|h4|h5|h6|p|li|a|button|figcaption|blockquote|dt|dd|label";
-const BLOCK = "div|section|article|ul|ol|h[1-6]|p|li|a|button|img|figure|table|form|header|footer|nav|main|aside|picture|video|iframe|input|select|textarea|blockquote|dl";
-const ELEMENT = new RegExp(`<(${TAGS})\\b([^>]*)>((?:(?!<(?:/?(?:${BLOCK}))\\b)[\\s\\S])*?)</\\1\\s*>`, "gi");
-const strip = (html: string) => html.replace(/<(script|style|noscript|svg|template|textarea)\b[\s\S]*?<\/\1\s*>|<!--[\s\S]*?-->/gi, " ");
-const worth = (t: string) => t.length >= 2 && t.length <= 2000 && /[A-Za-z0-9\u00C0-\uFFFF]/.test(t);
-const hash = (t: string) => createHash("sha1").update(t).digest("hex").slice(0, 8);
-const kindOf = (tag: string) => tag[0] === "h" ? "Headings" : tag === "a" || tag === "button" ? "Links & buttons" : "Text";
-function textsOf(html: string) {
-  const out: { tag: string; text: string }[] = [];
-  for (const m of strip(html).matchAll(ELEMENT)) {
-    if (/aria-hidden="true"/i.test(m[2])) continue;
-    const text = plain(m[3]); if (worth(text)) out.push({ tag: m[1].toLowerCase(), text });
-  }
-  return out;
-}
+/* Pages without data-cms markers: the CMS picks the texts itself (see pagetexts.ts). Each text gets a key made from its
+   wording, so the website needs no changes: the CMS script finds the text on the live page by that original wording. */
 /** Adds texts to pages that have no markers. Texts found on most pages (menu, footer) become shared "global" texts. */
 function autoFields(found: { page: ScanPage; html: string }[], glob: Map<string, PageField>) {
   if (!found.length) return;
-  const per = found.map((f) => ({ ...f, texts: textsOf(f.html) }));
+  // Pictures are fields too (tag "image", text = their original address), so they can be swapped from the CMS.
+  const per = found.map((f) => ({ ...f, texts: [...findTexts(f.html), ...findImages(f.html).map((i) => ({ tag: "image", text: i.src, section: i.section, alt: i.alt }))] }));
   const count = new Map<string, number>();
   per.forEach((p) => new Set(p.texts.map((t) => t.tag + "\u0000" + t.text)).forEach((k) => count.set(k, (count.get(k) ?? 0) + 1)));
   const min = Math.max(2, Math.round(found.length * 0.6));
@@ -82,8 +68,10 @@ function autoFields(found: { page: ScanPage; html: string }[], glob: Map<string,
     const have = new Set(p.page.fields.map((f) => f.key));
     for (const t of p.texts) {
       const shared = found.length > 1 && (count.get(t.tag + "\u0000" + t.text) ?? 0) >= min;
-      const key = shared ? `global.${t.tag}.${hash(t.text)}` : `${p.page.slug}.${t.tag}.${hash(t.text)}`;
-      const f: PageField = { key, label: labelOf(key, t.tag, t.text), group: shared ? "Header & footer" : kindOf(t.tag), tag: t.tag, text: t.text };
+      const k = t.tag === "image" ? "img" : t.tag;
+      const key = shared ? `global.${k}.${textHash(t.text)}` : `${p.page.slug}.${k}.${textHash(t.text)}`;
+      const label = t.tag === "image" ? ("alt" in t && t.alt ? `Image: ${String(t.alt).slice(0, 40)}` : "Image") : kindOf(t.tag);
+      const f: PageField = { key, label, group: shared ? `${t.section} (every page)` : t.section, tag: t.tag, text: t.text };
       if (shared) { if (!glob.has(key)) glob.set(key, f); }
       else if (!have.has(key)) { have.add(key); p.page.fields.push(f); }
     }

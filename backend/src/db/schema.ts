@@ -120,6 +120,12 @@ export const pages = pgTable("pages", {
   content: text("content").notNull().default(""),
   status: statusEnum("status").notNull().default("DRAFT"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  // Review of the unpublished changes: "" (none), "WAITING" (an editor sent them), "CHANGES" (an admin sent them back).
+  reviewState: text("review_state").notNull().default(""),
+  reviewNote: text("review_note").notNull().default(""),
+  reviewBy: text("review_by").references(() => users.id, { onDelete: "set null" }),
+  reviewAt: timestamp("review_at", { withTimezone: true }),
+  editedBy: text("edited_by").references(() => users.id, { onDelete: "set null" }), // last person who saved a draft
   ...seoColumns(),
   createdAt: createdAt(), updatedAt: updatedAt(), deletedAt: deletedAt(),
 }, (t) => [uniqueIndex("pages_site_slug").on(t.websiteId, t.slug)]);

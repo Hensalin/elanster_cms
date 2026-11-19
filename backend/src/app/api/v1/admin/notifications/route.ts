@@ -3,11 +3,17 @@ import { db, schema } from "@/db";
 import { accessibleWebsiteIds } from "@/lib/auth";
 import { admin, json } from "@/lib/http";
 
+async function nameMap(ids: (string | null)[]) {
+  const list = [...new Set(ids.filter((x): x is string => !!x))];
+  if (!list.length) return new Map<string, string>();
+  return new Map((await db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(inArray(schema.users.id, list))).map((u) => [u.id, u.name]));
+}
 type Note = { id: string; kind: "approve" | "review" | "changes" | "live"; title: string; text: string; href: string; at: string; action: boolean };
 
 /** The bell in the top bar. Each person only gets what concerns them:
  *  Super Admin: new accounts to approve + articles waiting for review on every website.
  *  Website Admin: articles waiting for review on the websites they publish for.
+ *  Pages follow the same rules: admins see pages waiting for review, editors see pages sent back or published.
  *  Editor: articles sent back with changes requested, and their articles that went live. */
 export const GET = admin(async (_req, _c, user) => {
   const notes: Note[] = []; const ids = await accessibleWebsiteIds(user); const all = ids === "all" ? [] : ids;
@@ -24,11 +30,23 @@ export const GET = admin(async (_req, _c, user) => {
     const rev = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.status, "IN_REVIEW"), inArray(schema.blogs.websiteId, publishFor)),
       orderBy: desc(schema.blogs.updatedAt), limit: 15, columns: { id: true, title: true, updatedAt: true }, with: { website: { columns: { name: true } }, author: { columns: { name: true } } } });
     for (const b of rev) notes.push({ id: "r" + b.id, kind: "review", title: `Waiting for review: “${b.title}”`, text: `${b.author?.name ?? "Someone"} · ${b.website?.name ?? ""}`, href: `/content?open=blogs:${b.id}`, at: b.updatedAt.toISOString(), action: true });
+    const prev = await db.query.pages.findMany({ where: and(isNull(schema.pages.deletedAt), eq(schema.pages.reviewState, "WAITING"), inArray(schema.pages.websiteId, publishFor)),
+      orderBy: desc(schema.pages.reviewAt), limit: 15, columns: { id: true, title: true, reviewAt: true, reviewBy: true }, with: { website: { columns: { name: true } } } });
+    const names = await nameMap(prev.map((x) => x.reviewBy));
+    for (const pg of prev) notes.push({ id: "pr" + pg.id, kind: "review", title: `Page waiting for review: ${pg.title}`, text: `${names.get(pg.reviewBy ?? "") ?? "Someone"} · ${pg.website?.name ?? ""}`, href: `/pages/${pg.id}`, at: (pg.reviewAt ?? new Date()).toISOString(), action: true });
   }
   if (all.length) {
     const mine = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.authorId, user.id), inArray(schema.blogs.websiteId, all), ne(schema.blogs.reviewNote, ""), eq(schema.blogs.status, "DRAFT")),
       orderBy: desc(schema.blogs.updatedAt), limit: 10, columns: { id: true, title: true, reviewNote: true, updatedAt: true } });
     for (const b of mine) notes.push({ id: "c" + b.id, kind: "changes", title: `Changes requested on “${b.title}”`, text: b.reviewNote.slice(0, 120), href: `/content?open=blogs:${b.id}`, at: b.updatedAt.toISOString(), action: true });
+    const myPages = await db.query.pages.findMany({ where: and(isNull(schema.pages.deletedAt), eq(schema.pages.reviewBy, user.id), inArray(schema.pages.websiteId, all)),
+      orderBy: desc(schema.pages.reviewAt), limit: 15, columns: { id: true, title: true, reviewState: true, reviewNote: true, reviewAt: true, publishedAt: true }, with: { website: { columns: { name: true } } } });
+    for (const pg of myPages) {
+      const at = (pg.reviewAt ?? new Date()).toISOString();
+      if (pg.reviewState === "CHANGES") notes.push({ id: "pc" + pg.id, kind: "changes", title: `Changes requested on page ${pg.title}`, text: pg.reviewNote.slice(0, 120), href: `/pages/${pg.id}`, at, action: true });
+      else if (!isSuper && pg.reviewState === "" && pg.publishedAt && pg.reviewAt && +pg.publishedAt >= +pg.reviewAt - 5000 && +pg.publishedAt > Date.now() - 14 * 864e5)
+        notes.push({ id: "pl" + pg.id, kind: "live", title: `Your changes to ${pg.title} are live`, text: `Published on ${pg.website?.name ?? "your website"}`, href: `/pages/${pg.id}`, at, action: false });
+    }
     if (!isSuper) {
       const live = await db.query.blogs.findMany({ where: and(isNull(schema.blogs.deletedAt), eq(schema.blogs.authorId, user.id), inArray(schema.blogs.websiteId, all), eq(schema.blogs.status, "PUBLISHED"), gte(schema.blogs.publishedAt, new Date(Date.now() - 14 * 864e5))),
         orderBy: desc(schema.blogs.publishedAt), limit: 5, columns: { id: true, title: true, publishedAt: true }, with: { website: { columns: { name: true } } } });
