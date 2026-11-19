@@ -1,0 +1,273 @@
+newman
+
+Elanster CMS — full backend test
+
+❏ 0. Health
+↳ Health check (database + settings)
+  GET http://localhost:3100/api/v1/health [200 OK, 629B, 74ms]
+  ✓  Status is 200
+  ✓  Database connects
+  ✓  SESSION_SECRET is set
+
+❏ 1. Sign in
+↳ Sign in with a wrong password is refused
+  POST http://localhost:3100/api/v1/auth/login [401 Unauthorized, 574B, 121ms]
+  ✓  Refused (401 or 429)
+
+↳ Sign in
+  POST http://localhost:3100/api/v1/auth/login [200 OK, 918B, 82ms]
+  ✓  Status is 200
+  ✓  Returns the user
+  ✓  Session cookie is set
+
+↳ Who am I
+  GET http://localhost:3100/api/v1/auth/me [200 OK, 660B, 10ms]
+  ✓  Status is 200
+  ✓  Has a role
+
+↳ Dashboard numbers
+  GET http://localhost:3100/api/v1/admin/stats [200 OK, 9.16kB, 21ms]
+  ✓  Status is 200
+  ✓  Has counts
+
+❏ 2. Websites
+↳ List websites (picks the one in siteSlug)
+  GET http://localhost:3100/api/v1/admin/websites [200 OK, 1.22kB, 9ms]
+  ✓  Status is 200
+  ✓  At least one website
+  ✓  Website found: Elanster Technologies
+
+↳ Create a read-only API key (only if apiKey is empty)
+  POST http://localhost:3100/api/v1/admin/websites/cb1a37d1a0d725cb2ce016d0/api-keys [201 Created, 624B, 17ms]
+  ✓  Status is 201
+  ✓  Key starts with ek_live_
+
+❏ 3. Categories
+↳ List categories
+  GET http://localhost:3100/api/v1/admin/categories?website=cb1a37d1a0d725cb2ce016d0 [200 OK, 1.02kB, 8ms]
+  ✓  Status is 200
+  ✓  Is a list
+
+↳ Create category
+  POST http://localhost:3100/api/v1/admin/categories [201 Created, 679B, 10ms]
+  ✓  Created (201) or already there (200)
+
+↳ Change category colour
+  PATCH http://localhost:3100/api/v1/admin/categories/e29ffde6289a5fa7a920f875 [200 OK, 540B, 11ms]
+  ✓  Status is 200
+
+❏ 4. Images
+↳ Import an image from a link
+  POST http://localhost:3100/api/v1/admin/media/from-url [201 Created, 699B, 27ms]
+  ✓  Imported (201/200)
+
+↳ List images
+  GET http://localhost:3100/api/v1/admin/media?website=cb1a37d1a0d725cb2ce016d0 [200 OK, 1.31kB, 7ms]
+  ✓  Status is 200
+  ✓  Contains the imported image
+
+↳ Image file is served (public)
+  GET http://localhost:3100/api/v1/media/33ec2717930fb0d990cbeeff [200 OK, 237.14kB, 8ms]
+  ✓  Status is 200
+  ✓  Is an image
+
+❏ 5. Blog articles
+↳ Create draft article
+  POST http://localhost:3100/api/v1/admin/blogs [201 Created, 475.78kB, 48ms]
+  ✓  Status is 201
+  ✓  Is a draft
+  ✓  Summary filled automatically
+  ✓  Author defaults to me
+
+↳ Create article without title is refused
+  POST http://localhost:3100/api/v1/admin/blogs [422 Unprocessable Entity, 645B, 28ms]
+  ✓  Status is 422
+
+↳ Search articles
+  GET http://localhost:3100/api/v1/admin/blogs?q=Postman%20test&limit=10 [200 OK, 1.47kB, 9ms]
+  ✓  Status is 200
+  ✓  Finds the new article
+
+↳ Get article
+  GET http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9 [200 OK, 475.78kB, 52ms]
+  ✓  Status is 200
+  ✓  Has content and category
+
+↳ Edit article
+  PUT http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9 [200 OK, 475.48kB, 33ms]
+  ✓  Status is 200
+  ✓  Title changed
+
+↳ Version history has the old version
+  GET http://localhost:3100/api/v1/admin/versions?entity=blog&id=e2a2c0c85c943fae9cf8a2a9 [200 OK, 1.1kB, 8ms]
+  ✓  Status is 200
+  ✓  At least one version
+
+↳ Restore the old version
+  POST http://localhost:3100/api/v1/admin/versions/vmwn1wqazy0smpe [200 OK, 540B, 11ms]
+  ✓  Status is 200
+
+↳ Title is back to the old one
+  GET http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9 [200 OK, 475.47kB, 25ms]
+  ✓  Status is 200
+  ✓  Restored
+
+↳ Send for review
+  POST http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9/publish [200 OK, 1.34kB, 28ms]
+  ✓  Status is 200
+  ✓  In review
+
+↳ Request changes without a note is refused
+  POST http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9/publish [422 Unprocessable Entity, 585B, 6ms]
+  ✓  Status is 422
+
+↳ Request changes with a note
+  POST http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9/publish [200 OK, 1.36kB, 8ms]
+  ✓  Status is 200
+  ✓  Back to draft with the note
+
+↳ Publish
+  POST http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9/publish [200 OK, 1.36kB, 7ms]
+  ✓  Status is 200
+  ✓  Live
+  ✓  Review note cleared
+
+↳ PUBLIC: article list shows it (what the website reads)
+  GET http://localhost:3100/api/v1/websites/elanster/blogs?limit=50 [200 OK, 2.78kB, 21ms]
+  ✓  Status is 200
+  ✓  Published article is listed
+  ✓  Drafts are never listed
+
+↳ PUBLIC: one article with text, image and category
+  GET http://localhost:3100/api/v1/websites/elanster/blogs/postman-test-article-2 [200 OK, 1.58kB, 10ms]
+  ✓  Status is 200
+  ✓  Has text
+  ✓  Has featured image URL
+  ✓  Has category
+
+↳ PUBLIC: without API key is refused
+  GET http://localhost:3100/api/v1/websites/elanster/blogs [401 Unauthorized, 541B, 3ms]
+  ✓  Status is 401
+
+↳ PUBLIC: wrong API key is refused
+  GET http://localhost:3100/api/v1/websites/elanster/blogs [401 Unauthorized, 541B, 4ms]
+  ✓  Status is 401
+
+↳ Unpublish
+  POST http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9/publish [200 OK, 1.36kB, 14ms]
+  ✓  Status is 200
+  ✓  Off the website
+
+↳ PUBLIC: unpublished article is gone
+  GET http://localhost:3100/api/v1/websites/elanster/blogs/postman-test-article-2 [404 Not Found, 529B, 7ms]
+  ✓  Status is 404
+
+↳ Schedule in the past is refused
+  POST http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9/publish [422 Unprocessable Entity, 595B, 4ms]
+  ✓  Status is 422
+
+❏ 6. Website pages
+↳ List pages
+  GET http://localhost:3100/api/v1/admin/pages?website=cb1a37d1a0d725cb2ce016d0 [200 OK, 3.59kB, 7ms]
+  ✓  Status is 200
+  ✓  Has pages (import them in Website connection if 0)
+
+↳ Get page with its editable text
+  GET http://localhost:3100/api/v1/admin/pages/ce29a646ce654a3cb869bd76 [200 OK, 1.64kB, 35ms]
+  ✓  Status is 200
+  ✓  Has fields
+
+↳ Save a draft change
+  PUT http://localhost:3100/api/v1/admin/pages/ce29a646ce654a3cb869bd76 [200 OK, 570B, 8ms]
+  ✓  Status is 200
+  ✓  Has unpublished changes
+
+↳ Publish the page
+  POST http://localhost:3100/api/v1/admin/pages/ce29a646ce654a3cb869bd76/publish [200 OK, 540B, 8ms]
+  ✓  Status is 200
+
+↳ PUBLIC: website gets the new text
+  GET http://localhost:3100/api/v1/websites/elanster/pages/contact [200 OK, 645B, 5ms]
+  ✓  Status is 200
+  ✓  Changed text is live
+
+↳ Undo: put the old live text back
+  PUT http://localhost:3100/api/v1/admin/pages/ce29a646ce654a3cb869bd76 [200 OK, 570B, 6ms]
+  ✓  Status is 200
+
+↳ Undo: publish the old text
+  POST http://localhost:3100/api/v1/admin/pages/ce29a646ce654a3cb869bd76/publish [200 OK, 540B, 7ms]
+  ✓  Status is 200
+
+↳ Undo: put your old unsaved draft back
+  PUT http://localhost:3100/api/v1/admin/pages/ce29a646ce654a3cb869bd76 [200 OK, 571B, 5ms]
+  ✓  Status is 200
+
+↳ PUBLIC: website shows the old text again
+  GET http://localhost:3100/api/v1/websites/elanster/pages/contact [200 OK, 604B, 5ms]
+  ✓  Status is 200
+  ✓  Test text removed
+
+❏ 7. Admin
+↳ Users list (Super Admin only)
+  GET http://localhost:3100/api/v1/admin/people [200 OK, 1.11kB, 10ms]
+  ✓  200 for Super Admin, 403 for others
+
+↳ Activity log
+  GET http://localhost:3100/api/v1/admin/activity?days=1 [200 OK, 17.06kB, 12ms]
+  ✓  Status is 200
+  ✓  Records the test actions
+
+↳ Activity log as CSV
+  GET http://localhost:3100/api/v1/admin/activity?days=1&format=csv [200 OK, 5.93kB, 12ms]
+  ✓  Status is 200
+  ✓  Is CSV
+
+↳ Change my account with a wrong current password is refused
+  PATCH http://localhost:3100/api/v1/admin/account [400 Bad Request, 586B, 73ms]
+  ✓  Status is 400
+
+❏ 8. Clean up
+↳ Delete the test article
+  DELETE http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9 [200 OK, 540B, 12ms]
+  ✓  Status is 200
+
+↳ Deleted article is gone
+  GET http://localhost:3100/api/v1/admin/blogs/e2a2c0c85c943fae9cf8a2a9 [404 Not Found, 557B, 9ms]
+  ✓  404
+
+↳ Delete the test category
+  DELETE http://localhost:3100/api/v1/admin/categories/e29ffde6289a5fa7a920f875 [200 OK, 540B, 6ms]
+  ✓  Status is 200
+
+↳ Delete the test image
+  DELETE http://localhost:3100/api/v1/admin/media/33ec2717930fb0d990cbeeff [200 OK, 540B, 8ms]
+  ✓  Deleted
+
+↳ Sign out
+  POST http://localhost:3100/api/v1/auth/logout [200 OK, 613B, 5ms]
+  ✓  Status is 200
+
+↳ After sign out, admin API is closed
+  GET http://localhost:3100/api/v1/admin/blogs [401 Unauthorized, 564B, 4ms]
+  ✓  Status is 401
+
+┌─────────────────────────┬───────────────────┬──────────────────┐
+│                         │          executed │           failed │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│              iterations │                 1 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│                requests │                51 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│            test-scripts │                51 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│      prerequest-scripts │                 2 │                0 │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│              assertions │                88 │                0 │
+├─────────────────────────┴───────────────────┴──────────────────┤
+│ total run duration: 1717ms                                     │
+├────────────────────────────────────────────────────────────────┤
+│ total data received: 2.18MB (approx)                           │
+├────────────────────────────────────────────────────────────────┤
+│ average response time: 18ms [min: 3ms, max: 121ms, s.d.: 23ms] │
+└────────────────────────────────────────────────────────────────┘

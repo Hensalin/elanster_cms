@@ -1,44 +1,22 @@
 # Elanster CMS
 
-One central CMS for all your websites (Elanster, We Are Zion, Indzara, future sites).
-Admin dashboard + backend API + PostgreSQL database. Websites fetch published content over a secure API.
+Two separate apps in one repository:
 
-## What is built (Phases 1–5 core)
-- Login, sessions, roles: **Super Admin**, **Website Admin**, **Editor** (checked on the server, not just hidden buttons)
-- Websites: add, enable/disable, one API key per website
-- Blogs: list (search, filters, pagination), editor (rich text, slug, excerpt, tags, category, SEO fields),
-  save draft, preview link, publish, schedule, unpublish, update live article, duplicate, delete (soft)
-- Public API: published content only, one website per key
-- Dashboard with real counts, recent updates, activity log
+| Folder | What it is | Vercel project | Needs |
+|---|---|---|---|
+| `backend/` | API server: database, sign-in, roles, articles, pages, images, versions, public website API, article preview. **Test it with Postman** (`backend/postman`). | existing **elanster-cms** → `elanster-cms-five.vercel.app`, Root Directory = `backend` | `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`, `SESSION_SECRET`, optional `FRONTEND_URL` |
+| `frontend/` | Admin screens (dashboard, content, editors, users). Holds no secrets and never touches the database: every `/api/...` call is passed to the backend. | new project, Root Directory = `frontend` | `BACKEND_URL=https://elanster-cms-five.vercel.app` |
 
-## Coming next
-Pages and Page Sections, Media Library (featured image upload), Users & Roles screen, Categories screen, Settings, SEO overview.
+The website (`js/cms-config.js`) keeps using the backend address — nothing to change there.
 
-## Easiest way on Windows
-Install Node.js 22 and PostgreSQL 16, then **double-click `setup.bat`**. It creates the database, your `.env`, the tables and your admin user, then starts the CMS. Next time just double-click `start.bat`.
-
-## Set up on Windows by hand
-1. Install **Node.js 22+** and **PostgreSQL 16** (remember the password you choose for the `postgres` user).
-2. Create the database: open "SQL Shell (psql)" and run: `CREATE DATABASE elanster_cms;`
-3. In this folder: copy `.env.example` to `.env` and fill in `DATABASE_URL`, `SESSION_SECRET`, `SEED_ADMIN_PASSWORD`.
-4. Run:
-   ```
-   npm install
-   npm run db:migrate     # creates the tables
-   npm run db:seed        # creates the Super Admin and your 3 websites
-   npm run dev            # open http://localhost:3000
-   ```
-5. Sign in with the email and password from `.env`. Go to **Websites → API keys** to create a key for each website.
-
-## How a website uses it
+## Run on your computer
 ```
-GET /api/v1/websites/<site-short-name>/blogs?page=1&limit=10     (header: X-API-Key: <key>)
-GET /api/v1/websites/<site-short-name>/blogs/<slug>
+cd backend  && npm install && npm run dev     # http://localhost:3001  (needs backend/.env, see .env.example)
+cd frontend && npm install && npm run dev     # http://localhost:3000  (BACKEND_URL defaults to http://localhost:3001)
 ```
-See `examples/website-blog-example.html`. A key can only read its own website's **published** articles.
-Responses are cached for 30 seconds by CDNs, so a publish appears on the website within about 30 seconds.
 
-## Security notes
-- Passwords are hashed (bcrypt). The session cookie is httpOnly. API keys are stored only as hashes.
-- Article HTML is cleaned on save (scripts, event handlers, iframes removed).
-- Set a strong `SESSION_SECRET` and use HTTPS in production. Do not commit `.env`.
+## Database changes
+Run `backend/SUPABASE-UPDATE.sql` once in Supabase → SQL Editor (safe to run again).
+
+## Backend API tests
+Import `backend/postman/Elanster-CMS.postman_collection.json` into Postman — see `backend/postman/POSTMAN-GUIDE.md`.
