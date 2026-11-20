@@ -29,6 +29,8 @@ export function allowedPath(path: string, pageFiles: Set<string>, dir: string | 
    nothing is fetched from the CMS. Turning Git publishing off writes the pages once more without this. */
 const PREVIEW = `/[?&]cms-edit=1/.test(location.search)&&window.parent!==window`;
 export function gitOnly(html: string): string {
+  // A normal website (no CMS script in it) is written exactly as it is: nothing is added.
+  if (!/<script\b[^>]*\bsrc=["'][^"']*(?:cms-config|cms-content|\/cms)\.js/i.test(html)) return html;
   let out = html;
   if (!/<meta\s+name=["']elanster-cms["']\s+content=["']git["']/i.test(out)) out = out.replace(/<\/head>/i, () => `  <meta name="elanster-cms" content="git">\n</head>`);
   // <script src=".../cms-config.js|cms-content.js|cms.js" ...></script> → loaded only for the editor preview, in the same order
@@ -133,7 +135,8 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
     P.dir = dir;
     if (!dir) { if (arts.length) P.warnings.push("No article files were found on this website (for example blogs/<name>.html), so articles were not written to Git"); }
     else {
-      let template: string | null = null;
+      let template: string | null = null, handMade: string | null = null, cmsMade: string | null = null;
+      const isGen = (h: string) => /<meta\s+name=["']generator["']\s+content=["']Elanster CMS["']/i.test(h);
       const own = new Map<string, { orig: string; repo: Buffer | null; created: boolean }>();
       for (const a of arts) {
         const path = `${dir}/${a.slug}.html`; if (pageFiles.has(path)) { P.warnings.push(`${path}: clashes with a page of the website (skipped)`); continue; }
@@ -144,8 +147,16 @@ async function plan(site: typeof schema.websites.$inferSelect, repo: string, hea
         } else if (!rec && repoBuf) own.set(path, { orig: repoBuf.toString("utf8"), repo: repoBuf, created: false });
         else own.set(path, { orig: "", repo: repoBuf, created: true });
         if (!template && !own.get(path)!.created) template = own.get(path)!.orig;
+        // A file the CMS once wrote but a person has since replaced with a hand-made design (no CMS tag):
+        // its design is used for every article, and the CMS still owns the file.
+        const txt = repoBuf?.toString("utf8") ?? "";
+        if (rec?.kind === "article" && txt && !isGen(txt) && /<article\b|data-cms-article/i.test(txt) && !handMade) handMade = txt;
+        // An article file the CMS wrote in this folder style (not the old article.html app) also works as the design.
+        if (rec && txt && isGen(txt) && !/id="articleApp"/.test(txt) && /<article\b/i.test(txt) && !cmsMade) cmsMade = txt;
       }
+      if (!template && handMade) template = handMade;
       if (!template) for (const r of rows) if (r.kind === "article-own" && r.original) { template = r.original; break; }
+      if (!template && cmsMade) template = cmsMade;
       for (const a of arts) {
         const path = `${dir}/${a.slug}.html`, o = own.get(path); if (!o) continue;
         const base = o.created ? template : o.orig;

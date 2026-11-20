@@ -31,14 +31,15 @@ function ContentScreen() {
   useEffect(() => { api("/api/v1/auth/me").then((m) => setRoles({ sup: m.user.role === "SUPER_ADMIN", map: m.websiteRoles ?? {} })).catch(() => {}); }, []);
   const canPub = (websiteId: string) => roles.sup || roles.map[websiteId] === "WEBSITE_ADMIN";
   useEffect(() => { api<any[]>("/api/v1/admin/websites").then(setSites).catch(() => {}); }, []);
-  const syncTarget = () => (site ? sites.find((x) => x.id === site) : sites.filter((x) => x.active && x.domain).length === 1 ? sites.find((x) => x.active && x.domain) : null) ?? null;
+  const syncTarget = () => (site ? sites.find((x) => x.id === site) : sites.filter((x) => x.active && (x.domain || x.gitRepo)).length === 1 ? sites.find((x) => x.active && (x.domain || x.gitRepo)) : null) ?? null;
   /** Framer-style: read the live website and bring in all its pages. */
   const syncPages = async (quiet = false) => {
-    const t = syncTarget(); if (!t) { if (!quiet) toast("Choose a website (top left) that has an address", true); return; }
+    const t = syncTarget(); if (!t || (!t.domain && !t.gitRepo)) { if (!quiet) toast("Choose a website (top left) first", true); return; }
     setSyncing(true);
     try {
       const r = await api(`/api/v1/admin/websites/${t.id}/sync-pages`, { method: "POST" });
-      toast(`${r.pages.length} page${r.pages.length === 1 ? "" : "s"} found on ${t.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}` + (r.created ? ` · ${r.created} new` : "") + (r.removed ? ` · ${r.removed} removed` : "") + (r.posts?.added ? ` · ${r.posts.added} article${r.posts.added === 1 ? "" : "s"} brought in` : "") + (r.posts?.filled ? ` · ${r.posts.filled} article${r.posts.filled === 1 ? "" : "s"} completed (photo/category)` : "") + (r.posts?.problems?.length ? ` · Problem: ${r.posts.problems[0]}` : "") + (r.untagged?.length ? ` · ${r.untagged.length} not editable yet` : ""));
+      const from = t.gitRepo ? `GitHub (${t.gitRepo})` : String(t.domain).replace(/^https?:\/\//, "").replace(/\/$/, "");
+      toast(`${r.pages.length} page${r.pages.length === 1 ? "" : "s"} read from ${from}` + (r.created ? ` · ${r.created} new` : "") + (r.removed ? ` · ${r.removed} removed` : "") + (r.posts?.added ? ` · ${r.posts.added} article${r.posts.added === 1 ? "" : "s"} brought in` : "") + (r.posts?.filled ? ` · ${r.posts.filled} article${r.posts.filled === 1 ? "" : "s"} completed (photo/category)` : "") + (r.posts?.problems?.length ? ` · Problem: ${r.posts.problems[0]}` : "") + (r.untagged?.length ? ` · ${r.untagged.length} not editable yet` : ""));
       loadRef.current();   // the list as it is NOW (the person may have switched website or Blog/Pages while the sync ran)
     } catch (e) { if (!quiet) toast((e as Error).message, true); } finally { setSyncing(false); }
   };
@@ -65,7 +66,7 @@ function ContentScreen() {
   useEffect(() => { setRows(null); const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load]); // eslint-disable-line
   useEffect(() => { setSel(new Set()); setPage(1); }, [kind, site, q, status]);
   useEffect(() => {
-    const t = syncTarget(); if (!site || !rows || !t?.domain || !t.active || autoSynced.current.has(t.id)) return;   // "All websites": nothing is read automatically
+    const t = syncTarget(); if (!site || !rows || !t?.domain || t.gitRepo || !t.active || autoSynced.current.has(t.id)) return;   // GitHub sites: read on demand (button)   // "All websites": nothing is read automatically
     if (!canPub(t.id)) return;   // only Website Admins and Super Admins may read the website (the server refuses editors)
     autoSynced.current.add(t.id); syncPages(true);
   }, [kind, rows, sites, site, roles]); // eslint-disable-line
@@ -114,7 +115,7 @@ function ContentScreen() {
       <div className="list-head">
         <div><h1>{kind === "blogs" ? "Blog" : "Pages"}</h1><p>{kind === "blogs" ? "Write, review and publish articles. They appear on your website's Blog page." : "Every page of your live website, kept in sync. Edit text, links and images; the design stays exactly as it is."}</p></div>
         <div className="list-actions">
-          {(() => { const t = syncTarget(); return !t || canPub(t.id); })() && <button className="btn" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Sync from website"}</button>}
+          {(() => { const t = syncTarget(); return !t || canPub(t.id); })() && <button className="btn" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading…" : syncTarget()?.gitRepo ? "Sync from GitHub" : "Sync from website"}</button>}
           {kind === "pages" && <button className="btn" onClick={() => router.push("/pages")}><Link2 size={15} /> Connection</button>}
           {kind === "blogs" && <button className="btn dark" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button>}
         </div>

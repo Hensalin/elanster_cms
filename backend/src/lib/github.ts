@@ -76,3 +76,11 @@ export async function commitFiles(repo: string, branch: string, base: { commit: 
   if (!r.ok) { if (r.status === 422) throw new GitError("The branch changed while publishing", 422); return fail(r, "Updating the branch"); }
   return sha;
 }
+
+/** Every file in the repo at that tree (path + Git hash). */
+export async function listTree(repo: string, tree: string): Promise<{ path: string; sha: string; size: number }[]> {
+  const res = await call(`/repos/${repo}/git/trees/${tree}?recursive=1`);
+  if (!res.ok) return fail(res, "Reading the file list");
+  const j = await res.json() as { tree: { path: string; type: string; sha: string; size?: number }[]; truncated?: boolean };
+  return j.tree.filter((t) => t.type === "blob").map((t) => ({ path: t.path, sha: t.sha, size: t.size ?? 0 }));
+}

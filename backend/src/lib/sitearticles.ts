@@ -66,6 +66,10 @@ function fillCard(card: string, x: Article, isNew: boolean, href: string, asset:
   if (p && x.excerpt) edits.push({ ...innerRange(card, p), text: esc(x.excerpt) });
   const img = all(root, (e) => e.name === "img")[0];
   const url = x.featuredImage?.url ? withAssets(x.featuredImage.url, asset) : "";
+  // the category label on the card (e.g. <span class="post__tag">AI Strategy</span>)
+  const cat = x.category?.name;
+  const tagEl = all(root, (e) => ["span", "small", "em"].includes(e.name) && /(?:^|[\s_-])(tag|category|cat|badge)(?:$|[\s_-])/i.test(e.attribs.class ?? "") && !e.children.some(isEl))[0];
+  if (cat && tagEl) edits.push({ ...innerRange(card, tagEl), text: esc(cat) });
   if (img && url) { const t = openTag(card, img); let tag = card.slice(t.start, t.end); tag = setAttr(dropAttr(dropAttr(tag, "srcset"), "data-srcset"), "src", url); tag = setAttr(tag, "alt", x.featuredImage?.alt || x.title); edits.push({ ...t, text: tag }); }
   if (isNew) {
     const t = openTag(card, root); edits.push({ ...t, text: setAttr(card.slice(t.start, t.end), "href", href) });
@@ -143,6 +147,12 @@ export function renderInFile(html: string, a: Article, opts: { url: string; asse
     const cover = all(main, (e) => e.name === "img").find((i) => at(i).startIndex! > from && at(i).startIndex! < to);
     if (cover) { const t = openTag(html, cover); let tag = html.slice(t.start, t.end); tag = setAttr(dropAttr(dropAttr(tag, "srcset"), "data-srcset"), "src", url); tag = setAttr(tag, "alt", a.featuredImage?.alt || a.title); edits.push({ ...t, text: tag }); }
   }
+  // the category label next to the title (e.g. <span class="post__tag">Insights</span>)
+  if (h && a.category?.name) {
+    const tagEl = all(main, (e) => ["span", "small", "em", "p"].includes(e.name) && /(?:^|[\s_-])(tag|category|cat|badge)(?:$|[\s_-])/i.test(e.attribs.class ?? "") && !e.children.some(isEl)
+      && at(e).startIndex! < at(body).startIndex! && !inside(e, ["header", "nav", "footer", "a"]))[0];
+    if (tagEl) edits.push({ ...innerRange(html, tagEl), text: esc(a.category.name) });
+  }
   let out = apply(html, edits);
   // Google tags: title, description, social cards, address, structured data
   const title = a.seo.title || a.title, desc = a.seo.description || a.excerpt || "";
@@ -180,7 +190,7 @@ export function renderInFile(html: string, a: Article, opts: { url: string; asse
     else return m;
     return o + JSON.stringify(data).replace(/</g, "\\u003c") + c;
   });
-  if (!/<meta\s+name=["']generator["']\s+content=["']Elanster CMS["']/i.test(out)) out = out.replace(/<\/head>/i, () => `  <meta name="generator" content="Elanster CMS">\n</head>`);
+  // No CMS tag is added: the CMS knows the files it wrote from its own records (git_files), so the website stays plain.
   if (merged) return out;
   return out.replace(/<\/head>/i, () => `  <script type="application/ld+json">${JSON.stringify({ "@context": "https://schema.org", ...ld }).replace(/</g, "\\u003c")}</script>\n</head>`);
 }

@@ -111,7 +111,8 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
 
   if (!page) return <div className="skel" aria-busy="true"><div /><div /><div /></div>;
   const base = (page.website?.domain || "").replace(/\/$/, "");
-  const src = base ? `${base}/${page.file || "index.html"}?cms-edit=1` : "";
+  // Connected by GitHub: the preview comes from the repository through the CMS (sandboxed). Old way: the live website with its CMS script.
+  const src = page.preview ? page.preview : base ? `${base}/${page.file || "index.html"}?cms-edit=1` : "";
   const isEdited = (f: Field) => (vals[f.key] ?? f.text) !== f.text;
   const onlyEdited = editedOnly ?? (canPub && rv.state === "WAITING");   // a reviewer starts with just the changed texts
   const shown = fields.filter((f) => (!onlyEdited || isEdited(f)) && (!q || (f.text + " " + (vals[f.key] ?? "")).toLowerCase().includes(q.toLowerCase())));
@@ -182,7 +183,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
         {src ? (() => {
           const w = mode === "desktop" ? 1280 : mode === "tablet" ? 820 : 390; const scale = Math.min(1, boxW / w); const h = Math.round(boxH / scale);
           return (<div ref={box} style={{ height: "calc(100vh - 270px)", minHeight: 360, overflow: "hidden", borderRadius: 18, background: "#fff", display: "flex", justifyContent: "center" }}>
-            <iframe ref={frame} key={mode} src={src} title="Live preview of the page" onLoad={() => setReady(false)}
+            <iframe ref={frame} key={mode} src={src} title="Live preview of the page" onLoad={() => setReady(false)} {...(page.preview ? { sandbox: "allow-scripts" } : {})}
               style={{ width: w, height: h, border: 0, transform: `scale(${scale})`, transformOrigin: "top center", flex: "none", background: "#fff" }} />
           </div>);
         })() : <div className="empty">Connect this website on the <Link href="/pages">Pages</Link> screen to see a live preview here.</div>}

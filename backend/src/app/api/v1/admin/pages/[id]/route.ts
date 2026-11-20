@@ -4,9 +4,10 @@ import { saveVersion } from "@/lib/ratelimit";
 import { canEdit, canPublish, websiteRole } from "@/lib/auth";
 import { admin, fail, json } from "@/lib/http";
 import { draftSchema, hasUnpublished, readContent, writeContent } from "@/lib/pagecontent";
+import { previewToken } from "@/lib/sitefiles";
 
 async function load(id: string) {
-  return db.query.pages.findFirst({ where: eq(schema.pages.id, id), with: { website: { columns: { name: true, slug: true, domain: true } } } });
+  return db.query.pages.findFirst({ where: eq(schema.pages.id, id), with: { website: { columns: { name: true, slug: true, domain: true, gitRepo: true } } } });
 }
 
 export const GET = admin<{ params: Promise<{ id: string }> }>(async (_req, { params }, user) => {
@@ -19,7 +20,9 @@ export const GET = admin<{ params: Promise<{ id: string }> }>(async (_req, { par
   return json({ id: p.id, websiteId: p.websiteId, website: p.website, title: p.title, slug: p.slug, status: p.status, publishedAt: p.publishedAt,
     updatedAt: p.updatedAt, file: c.file, fields: c.fields, draft: c.draft, published: c.published, unpublished: hasUnpublished(c),
     review: { state: p.reviewState, note: p.reviewNote, by: by?.name ?? null, byMe: p.reviewBy === user.id, at: p.reviewAt },
-    canPublish: canPublish(role) });
+    canPublish: canPublish(role),
+    // Connected by GitHub: the preview shows the page straight from the repository (the website needs no CMS script).
+    preview: p.website?.gitRepo && c.file ? `/api/v1/site-files/${previewToken(p.websiteId)}/${c.file.split("/").map(encodeURIComponent).join("/")}?slug=${encodeURIComponent(p.slug)}` : null });
 });
 
 /** Save the draft text (only values that differ from the original are kept). Never changes the live site. */

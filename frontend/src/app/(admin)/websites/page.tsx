@@ -12,29 +12,32 @@ export default function Websites() {
   useEffect(() => { load(); api("/api/v1/auth/me").then(setMe); }, [load]);
   const isSuper = me?.user.role === "SUPER_ADMIN";
   return (<>
-    <div className="head"><div><h1>Websites</h1><p>Every website has its own content and its own API key.</p></div>
+    <div className="head"><div><h1>Websites</h1><p>Each website is connected by its GitHub repository. Publish writes the changes there.</p></div>
       {isSuper && <button className="btn dark" onClick={() => setAdd(true)}><Plus size={15} /> Add website</button>}</div>
     {!sites ? <div className="skel" aria-busy="true"><div /><div /><div /></div> : !sites.length ? <div className="empty">No websites yet.</div> :
       <div className="card tbl" style={{ padding: 0 }}><table>
         <thead><tr><th>Website</th><th>Address</th><th className="num">Live</th><th className="num">Drafts</th><th>Connection</th><th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{sites.map((s) => {
           const setAddress = async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { const r = await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast(r.sync?.pages ? `Address saved · ${r.sync.pages.length} pages brought in from the website` : r.sync?.error ? `Address saved. Pages not read: ${r.sync.error}` : "Address saved"); load(); } catch (e) { toast((e as Error).message, true); } };
+          const readGit = async () => { toast(`Reading ${s.gitRepo} from GitHub…`); try { const r = await api(`/api/v1/admin/websites/${s.id}/sync-pages`, { method: "POST" }); toast(`${r.pages.length} pages read from GitHub${r.created ? ` · ${r.created} new` : ""}${r.removed ? ` · ${r.removed} removed` : ""}${r.posts?.added ? ` · ${r.posts.added} articles brought in` : ""}`); load(); } catch (e) { toast((e as Error).message, true); } };
           const toggle = async () => { if (s.active && !confirm(`Turn off ${s.name}? The CMS stops sending content to this website until you turn it on again.`)) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website turned off" : "Website turned on"); load(); } catch (e) { toast((e as Error).message, true); } };
           return (<tr key={s.id}>
           <td><div className="site-cell"><span className={"site-ic" + (s.active ? " on" : "")} aria-hidden>{s.name.slice(0, 1)}</span><div><b>{s.name}</b><small>{s.slug}</small></div></div></td>
-          <td>{s.domain ? <a className="mut" href={s.domain} target="_blank" rel="noreferrer">{s.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a> : <span className="mut">Not set</span>}</td>
+          <td>{s.domain ? <a className="mut" href={s.domain} target="_blank" rel="noreferrer">{s.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a> : <span className="mut">Not set</span>}
+            {s.gitRepo && <small className="mut" style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}><GitBranch size={12} aria-hidden /> {s.gitRepo}{s.gitBranch && s.gitBranch !== "main" ? ` · ${s.gitBranch}` : ""}</small>}</td>
           <td className="num">{s.published}</td><td className="num">{s.drafts}</td>
-          <td><Conn s={s} onCheck={() => setCheckFor(s)} /></td>
+          <td><Conn s={s} onCheck={() => (s.gitRepo ? setGitFor(s) : setCheckFor(s))} /></td>
           <td style={{ textAlign: "right" }}>{isSuper && <div className="acts">
             <button className="icon-btn" title="Set website address" aria-label={`Set address for ${s.name}`} onClick={setAddress}><Link2 size={15} /></button>
-            <button className="icon-btn" title="API keys" aria-label={`API keys for ${s.name}`} onClick={() => setKeysFor(s)}><KeyRound size={15} /></button>
-            <button className="icon-btn" title="Check connection" aria-label={`Check connection for ${s.name}`} onClick={() => setCheckFor(s)}><RefreshCw size={15} /></button>
+            {s.gitRepo ? <button className="icon-btn" title="Read again from GitHub (after someone changed the code)" aria-label={`Read ${s.name} again from GitHub`} onClick={readGit}><RefreshCw size={15} /></button>
+            : <><button className="icon-btn" title="API keys" aria-label={`API keys for ${s.name}`} onClick={() => setKeysFor(s)}><KeyRound size={15} /></button>
+            <button className="icon-btn" title="Check connection" aria-label={`Check connection for ${s.name}`} onClick={() => setCheckFor(s)}><RefreshCw size={15} /></button></>}
             <button className="icon-btn" title={s.gitRepo ? `Git publishing: ${s.gitStatus === "FAILED" ? "needs attention" : s.gitStatus === "WARN" ? "warning" : "on"}` : "Git publishing"} aria-label={`Git publishing for ${s.name}`} onClick={() => setGitFor(s)} style={s.gitStatus === "FAILED" ? { color: "#b91c1c" } : s.gitRepo ? { color: "#15803d" } : undefined}><GitBranch size={15} /></button>
             <button className="icon-btn" title={s.active ? "Turn off" : "Turn on"} aria-label={(s.active ? "Turn off " : "Turn on ") + s.name} onClick={toggle}><Power size={15} /></button>
             <button className="icon-btn danger-ic" title="Remove website" aria-label={`Remove ${s.name}`} onClick={async () => { if (!confirm(`Remove “${s.name}” from the CMS? Its articles and pages are hidden with it.`)) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "DELETE" }); toast("Website removed"); load(); } catch (e) { toast((e as Error).message, true); } }}><Trash2 size={15} /></button>
           </div>}</td>
         </tr>); })}</tbody></table></div>}
-    {add && <AddSite onClose={() => setAdd(false)} onDone={(r: any) => { setAdd(false); toast(r?.sync?.pages ? `Website added · ${r.sync.pages.length} pages brought in from ${r.domain.replace(/^https?:\/\//, "")}` : r?.sync?.error ? `Website added. Pages not read: ${r.sync.error}` : "Website added"); load(); }} />}
+    {add && <AddSite onClose={() => setAdd(false)} onDone={(r: any) => { setAdd(false); toast(r?.sync?.pages ? `Website connected · ${r.sync.pages.length} pages${r.sync.posts?.added ? ` and ${r.sync.posts.added} articles` : ""} read from ${r.sync.repo ?? r.domain.replace(/^https?:\/\//, "")}` : r?.sync?.error ? `Website added. Pages not read: ${r.sync.error}` : "Website added"); load(); }} />}
     {checkFor && <CheckPanel site={checkFor} onClose={() => { setCheckFor(null); load(); }} />}
     {gitFor && <GitPanel site={gitFor} onClose={() => { setGitFor(null); load(); }} toast={toast} />}
     {keysFor && <Keys site={keysFor} onClose={() => setKeysFor(null)} toast={toast} />}
@@ -43,15 +46,20 @@ export default function Websites() {
 }
 
 function AddSite({ onClose, onDone }: { onClose: () => void; onDone: (r: any) => void }) {
-  const [name, setName] = useState(""); const [domain, setDomain] = useState(""); const [err, setErr] = useState("");
+  const [name, setName] = useState(""); const [repo, setRepo] = useState(""); const [branch, setBranch] = useState("main"); const [domain, setDomain] = useState("");
+  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   return (<div className="modal" onClick={onClose}><form onClick={(e) => e.stopPropagation()} onSubmit={async (e) => {
-    e.preventDefault(); setErr(""); try { onDone(await api("/api/v1/admin/websites", { method: "POST", body: { name, domain } })); } catch (x) { setErr((x as Error).message); } }}
-    style={{ background: "var(--card)", borderRadius: 20, padding: 24, width: "min(520px,100%)" }}>
+    e.preventDefault(); setErr(""); setBusy(true);
+    try { onDone(await api("/api/v1/admin/websites", { method: "POST", body: { name, gitRepo: repo, gitBranch: branch || "main", domain } })); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); } }}
+    style={{ background: "var(--card)", borderRadius: 20, padding: 24, width: "min(560px,100%)" }}>
     <h2>Add website</h2>
-    <div className="field"><label htmlFor="n">Name</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Indzara" /></div>
-    <div className="field"><label htmlFor="d">Website address</label><input id="d" type="text" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="https://www.example.com" /><small>All pages on this address are brought in automatically. One address = one website.</small></div>
+    <p className="mut" style={{ marginTop: -4 }}>Connect the website's GitHub repository. The CMS reads its pages and blog from GitHub, and Publish writes the changes back there (Vercel then puts them live). Nothing is added to the website's code.</p>
+    <div className="field"><label htmlFor="n">Name</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="We Are Zion" /></div>
+    <div className="field"><label htmlFor="r">GitHub repository</label><input id="r" type="text" required value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="Hensalin/my-website" autoComplete="off" spellCheck={false} /><small>owner/name, or paste the github.com link. The server's GitHub token must be allowed to read and write it.</small></div>
+    <div className="field"><label htmlFor="b">Branch</label><input id="b" type="text" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" spellCheck={false} /></div>
+    <div className="field"><label htmlFor="d">Live address <span className="mut">(optional)</span></label><input id="d" type="text" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="https://my-website.vercel.app" /><small>Only for the "Open website" links.</small></div>
     {err && <p className="err-text">{err}</p>}
-    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn dark">Add website</button></div>
+    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn dark" disabled={busy}>{busy ? "Reading GitHub…" : "Connect"}</button></div>
   </form></div>);
 }
 
@@ -81,6 +89,11 @@ const ago = (d: string) => { const m = Math.round((Date.now() - +new Date(d)) / 
 /** Friendly connection status from the website's key use: connected / waiting / not connected / off. */
 function Conn({ s, onCheck }: { s: any; onCheck: () => void }) {
   const fresh = s.lastSeen && Date.now() - +new Date(s.lastSeen) < 7 * 864e5;
+  // Connected by GitHub: the status is the last read / publish with GitHub (no keys involved).
+  if (s.active && s.gitRepo) {
+    const [c, l] = s.gitStatus === "FAILED" ? ["UNPUBLISHED", "Needs attention"] : s.gitStatus === "WARN" ? ["IN_REVIEW", "Warning"] : s.gitStatus === "RUNNING" ? ["IN_REVIEW", "Publishing…"] : ["PUBLISHED", "GitHub"];
+    return (<button className="conn" onClick={onCheck} title={s.gitMessage || "Git publishing"}><span className={"badge " + c}>{l}</span><small>{s.gitAt ? `Last run ${ago(s.gitAt)}` : "Connected"}</small></button>);
+  }
   const [cls, label, sub] = !s.active ? ["OFF", "Off", "Turned off in the CMS"]
     : fresh ? ["PUBLISHED", "Connected", `Website read content ${ago(s.lastSeen)}`]
     : s.keys > 0 ? ["IN_REVIEW", "Waiting for website", s.lastSeen ? `Last seen ${ago(s.lastSeen)}` : "Key made, not used yet"]

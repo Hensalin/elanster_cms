@@ -34,21 +34,52 @@ const unesc = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").re
 type Edit = { start: number; end: number; text: string };
 
 /** The part of an element's inside that holds its words becomes `value`; icons and counters (children without letters) stay. */
-function setText(html: string, e: Element, value: string, out: Edit[]) {
+function setText(html: string, e: Element, value: string, out: Edit[]): boolean {
   const words = e.children.filter((c) => (c.type === "text" && LETTER.test(data(c))) || (isEl(c) && c.name !== "br" && LETTER.test(textOf(c))));
   if (!words.length) return false;
-  words.forEach((c, i) => {
-    const { startIndex: a, endIndex: b } = idx(c);
-    if (a == null || b == null) return;
-    if (i > 0) { out.push({ start: a, end: b + 1, text: "" }); return; }
+  // One part only: a plain text is replaced; a wrapper (e.g. <span class="line">) is kept and its inside is edited.
+  if (words.length === 1) {
+    const c = words[0];
+    if (isEl(c)) return setText(html, c, value, out);
+    const { startIndex: a, endIndex: b } = idx(c); if (a == null || b == null) return false;
     const raw = html.slice(a, b + 1);
-    const lead = c.type === "text" ? /^\s*/.exec(raw)![0] : "";
-    const last = words[words.length - 1], lastRaw = (() => { const { startIndex: x, endIndex: y } = idx(last); return x == null || y == null ? "" : html.slice(x, y + 1); })();
-    const trail = last.type === "text" ? /\s*$/.exec(lastRaw)![0] : "";
-    out.push({ start: a, end: b + 1, text: lead + esc(value) + trail });
+    out.push({ start: a, end: b + 1, text: /^\s*/.exec(raw)![0] + esc(value) + /\s*$/.exec(raw)![0] });
+    return true;
+  }
+  // Several parts (a heading split into design lines, "Five ways we ship AI," + "end to end."):
+  // only the changed words move, and every part keeps its own wrapper, so the design and its animation stay.
+  const segs = words.map((c) => norm(textOf(c)));
+  const old = segs.join(" "), nv = norm(value);
+  if (old === nv) return false;
+  let p = 0; while (p < old.length && p < nv.length && old[p] === nv[p]) p++;
+  let q = 0; while (q < old.length - p && q < nv.length - p && old[old.length - 1 - q] === nv[nv.length - 1 - q]) q++;
+  const chEnd = old.length - q, mid = nv.slice(p, nv.length - q);
+  let pos = 0, placed = false; const next: string[] = [];
+  for (const sg of segs) {
+    const a = pos, b = pos + sg.length; pos = b + 1;
+    if (chEnd < a || p > b || (p === chEnd && placed)) { next.push(sg); continue; }   // untouched part
+    const from = Math.max(p, a) - a, to = Math.min(chEnd, b) - a;
+    next.push(sg.slice(0, from) + (placed ? "" : mid) + sg.slice(to)); placed = true;
+  }
+  if (!placed) next[next.length - 1] = next[next.length - 1] + mid;
+  let did = false;
+  words.forEach((c, i) => {
+    const t = next[i].trim(); if (t === segs[i]) return;
+    if (isEl(c)) { if (t ? setText(html, c, t, out) : clearText(html, c, out)) did = true; return; }
+    const { startIndex: a, endIndex: b } = idx(c); if (a == null || b == null) return;
+    const raw = html.slice(a, b + 1);
+    out.push({ start: a, end: b + 1, text: /^\s*/.exec(raw)![0] + esc(t) + /\s*$/.exec(raw)![0] }); did = true;
   });
-  // The first word-child's range ends where it ends; later ones are emptied. (Neighbouring ranges never overlap.)
-  return true;
+  return did;
+}
+/** A part whose words were all removed: its words go, its wrapper stays (empty). */
+function clearText(html: string, e: Element, out: Edit[]): boolean {
+  let did = false;
+  for (const c of e.children) {
+    if (c.type === "text" && LETTER.test(data(c))) { const { startIndex: a, endIndex: b } = idx(c); if (a != null && b != null) { out.push({ start: a, end: b + 1, text: "" }); did = true; } }
+    else if (isEl(c) && c.name !== "br" && LETTER.test(textOf(c))) did = clearText(html, c, out) || did;
+  }
+  return did;
 }
 
 function setImg(html: string, e: Element, from: string, to: string, out: Edit[]) {
@@ -72,6 +103,8 @@ const metaAttr = (html: string, attr: string, name: string) => {
   const c = /\scontent\s*=\s*(["'])([\s\S]*?)\1/i.exec(m[0]); if (!c) return null;
   return { index: m.index, tag: m[0], q: c[1], value: unesc(c[2]), cStart: m.index + c.index + (c[0].indexOf(c[1]) + 1), cEnd: m.index + c.index + c[0].length - 1 };
 };
+
+const hasMarkerInside = (n: AnyNode): boolean => isEl(n) && n.children.some((c) => isEl(c) && (c.attribs["data-cms"] !== undefined || c.attribs["data-cms-img"] !== undefined || hasMarkerInside(c)));
 
 export type Applied = { html: string; changed: number };
 
@@ -105,7 +138,9 @@ export function applyEdits(html: string, slug: string, values: Record<string, st
       if (v !== undefined && setText(html, n, v, edits)) fields++;
       return;
     }
-    const counts = !hasBlockInside(n) && (MAIN.has(n.name) || (EXTRA.has(n.name) && ownText(n)));
+    // A heading or paragraph that holds tagged parts (e.g. <h1><span data-cms="home.top.2">…</span></h1>) is not one text:
+    // walk into it so each tagged part gets its edit. (Before, the heading was taken whole and its tagged parts were never reached.)
+    const counts = !hasBlockInside(n) && !hasMarkerInside(n) && (MAIN.has(n.name) || (EXTRA.has(n.name) && ownText(n)));
     if (counts) {
       const text = norm(textOf(n));
       if (worth(text)) {

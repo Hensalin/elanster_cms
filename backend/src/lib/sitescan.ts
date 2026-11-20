@@ -33,7 +33,7 @@ async function findPages(base: string, home: string) {
 }
 
 /** Reads the editable text of one page: everything tagged data-cms="key", plus its Google title/description. */
-function readPage(path: string, html: string) {
+export function readPage(path: string, html: string) {
   // The page's name in the CMS comes from its tags (data-cms="products.hero.1" → "products"), else from the file name.
   const prefixes = new Map<string, number>();
   for (const m of html.matchAll(/\sdata-cms(?:-img)?="([a-z0-9_-]+)\./gi)) if (m[1] !== "global") prefixes.set(m[1], (prefixes.get(m[1]) ?? 0) + 1);
@@ -57,7 +57,7 @@ function readPage(path: string, html: string) {
 /* Pages without data-cms markers: the CMS picks the texts itself (see pagetexts.ts). Each text gets a key made from its
    wording, so the website needs no changes: the CMS script finds the text on the live page by that original wording. */
 /** Adds texts to pages that have no markers. Texts found on most pages (menu, footer) become shared "global" texts. */
-function autoFields(found: { page: ScanPage; html: string }[], glob: Map<string, PageField>) {
+export function autoFields(found: { page: ScanPage; html: string }[], glob: Map<string, PageField>) {
   if (!found.length) return;
   // Pictures are fields too (tag "image", text = their original address), so they can be swapped from the CMS.
   const per = found.map((f) => ({ ...f, texts: [...findTexts(f.html), ...findImages(f.html).map((i) => ({ tag: "image", text: i.src, section: i.section, alt: i.alt }))] }));
@@ -202,6 +202,31 @@ export async function importPosts(websiteId: string, base: string, htmls: string
   return { found: found.length, added, filled, problems };
 }
 
+
+export type ScanList = ScanPage[];
+/** Saves the pages found on a website (new ones added, changed ones updated). Edits already made are kept. */
+export async function savePages(websiteId: string, list: ScanPage[]) {
+  let created = 0, updated = 0;
+  for (const p of list) {
+    const [ex] = await db.select().from(schema.pages).where(and(eq(schema.pages.websiteId, websiteId), eq(schema.pages.slug, p.slug)));
+    const keys = new Set(p.fields.map((f) => f.key));
+    if (!ex) {
+      await db.insert(schema.pages).values({ websiteId, title: p.title, slug: p.slug, status: "DRAFT", content: writeContent({ file: p.file ?? null, fields: p.fields, draft: {}, published: {} }) });
+      created++;
+    } else {
+      const old = readContent(ex.content); const keep = (r: Record<string, string>) => Object.fromEntries(Object.entries(r).filter(([k]) => keys.has(k)));
+      // Nothing new on the website for this page: leave it alone, so someone editing it right now is not disturbed.
+      if (ex.title === p.title && !ex.deletedAt && (old.file ?? null) === (p.file ?? null) && JSON.stringify(old.fields) === JSON.stringify(p.fields)) continue;
+      // Re-read just before writing so a draft saved in the meantime is kept.
+      const [now] = await db.select({ content: schema.pages.content }).from(schema.pages).where(eq(schema.pages.id, ex.id));
+      const cur = now ? readContent(now.content) : old;
+      await db.update(schema.pages).set({ title: p.title, deletedAt: null, content: writeContent({ file: p.file ?? null, fields: p.fields, draft: keep(cur.draft), published: keep(cur.published) }) }).where(eq(schema.pages.id, ex.id));
+      updated++;
+    }
+  }
+  return { created, updated };
+}
+
 /** Framer-style sync: whatever pages the live website has now appear in the CMS. Edits already made are kept. */
 export async function syncPages(websiteId: string, userId: string | null) {
   const [site] = await db.select().from(schema.websites).where(eq(schema.websites.id, websiteId));
@@ -238,24 +263,7 @@ export async function syncPages(websiteId: string, userId: string | null) {
   }
 
   const list = [...manifest.pages, ...(manifest.global ? [manifest.global] : [])];
-  let created = 0, updated = 0;
-  for (const p of list) {
-    const [ex] = await db.select().from(schema.pages).where(and(eq(schema.pages.websiteId, websiteId), eq(schema.pages.slug, p.slug)));
-    const keys = new Set(p.fields.map((f) => f.key));
-    if (!ex) {
-      await db.insert(schema.pages).values({ websiteId, title: p.title, slug: p.slug, status: "DRAFT", content: writeContent({ file: p.file ?? null, fields: p.fields, draft: {}, published: {} }) });
-      created++;
-    } else {
-      const old = readContent(ex.content); const keep = (r: Record<string, string>) => Object.fromEntries(Object.entries(r).filter(([k]) => keys.has(k)));
-      // Nothing new on the website for this page: leave it alone, so someone editing it right now is not disturbed.
-      if (ex.title === p.title && !ex.deletedAt && (old.file ?? null) === (p.file ?? null) && JSON.stringify(old.fields) === JSON.stringify(p.fields)) continue;
-      // Re-read just before writing so a draft saved in the meantime is kept.
-      const [now] = await db.select({ content: schema.pages.content }).from(schema.pages).where(eq(schema.pages.id, ex.id));
-      const cur = now ? readContent(now.content) : old;
-      await db.update(schema.pages).set({ title: p.title, deletedAt: null, content: writeContent({ file: p.file ?? null, fields: p.fields, draft: keep(cur.draft), published: keep(cur.published) }) }).where(eq(schema.pages.id, ex.id));
-      updated++;
-    }
-  }
+  const { created, updated } = await savePages(websiteId, list);
   // Articles the website already shows come in too (only ones the CMS does not have yet).
   if (source === "manifest") for (const p of await findPages(base, home)) { if (/blog|insight|news|article/i.test(p) && !(await isOwnArticlePage(websiteId, p))) { const h = await get(base + p); if (h && !GENERATED.test(h)) htmls.push(h); } }
   const posts = await importPosts(websiteId, base, htmls, userId).catch((e) => ({ found: 0, added: 0, filled: 0, problems: [(e as Error).message] }));

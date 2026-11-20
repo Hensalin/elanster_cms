@@ -4,6 +4,8 @@ import { db, schema } from "@/db";
 import { accessibleWebsiteIds } from "@/lib/auth";
 import { admin, fail, json, normDomain, slugify } from "@/lib/http";
 import { syncPages } from "@/lib/sitescan";
+import { syncFromGit } from "@/lib/gitsync";
+import { hasToken, validBranch, validRepo } from "@/lib/github";
 
 export const GET = admin(async (_req, _c, user) => {
   const ids = await accessibleWebsiteIds(user);
@@ -23,7 +25,9 @@ export const GET = admin(async (_req, _c, user) => {
   })));
 });
 
-const body = z.object({ name: z.string().min(2).max(80), slug: z.string().max(60).optional(), domain: z.string().max(200).default("") });
+const body = z.object({ name: z.string().min(2).max(80), slug: z.string().max(60).optional(), domain: z.string().max(200).default(""),
+  gitRepo: z.string().trim().max(201).default(""), gitBranch: z.string().trim().max(100).default("main") });
+export const maxDuration = 60;
 export const POST = admin(async (req, _c, user) => {
   const d = body.parse(await req.json());
   const slug = slugify(d.slug || d.name);
@@ -32,9 +36,16 @@ export const POST = admin(async (req, _c, user) => {
   const domain = normDomain(d.domain);
   if (domain) { const [same] = await db.select().from(schema.websites).where(and(eq(schema.websites.domain, domain), isNull(schema.websites.deletedAt)));
     if (same) return fail(`This address is already connected as “${same.name}”. One address = one website.`, 409); }
-  const [site] = await db.insert(schema.websites).values({ name: d.name, slug, domain }).returning();
+  const repo = d.gitRepo.replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "").replace(/\/$/, "");
+  if (repo && !validRepo(repo)) return fail("Write the repository as owner/name, for example Hensalin/my-website", 422);
+  if (repo && !validBranch(d.gitBranch || "main")) return fail("That branch name is not valid", 422);
+  if (repo && !hasToken()) return fail("The GitHub token is not set on the server (GITHUB_TOKEN)", 422);
+  const [site] = await db.insert(schema.websites).values({ name: d.name, slug, domain, gitRepo: repo, gitBranch: d.gitBranch || "main" }).returning();
   await db.insert(schema.activityLogs).values({ userId: user.id, websiteId: site.id, action: "WEBSITE_CREATE", entity: "website", entityId: site.id, summary: `Added website ${site.name}` });
   // Framer-style: the new website's pages come in straight away.
-  let sync = null; if (domain) { try { sync = await syncPages(site.id, user.id); } catch (e) { sync = { error: (e as Error).message }; } }
+  // Connected by GitHub: the pages and blog are read from the repository. Otherwise (old way) from the live address.
+  let sync = null;
+  if (repo) { try { sync = await syncFromGit(site.id, user.id); } catch (e) { sync = { error: (e as Error).message }; } }
+  else if (domain) { try { sync = await syncPages(site.id, user.id); } catch (e) { sync = { error: (e as Error).message }; } }
   return json({ ...site, sync }, 201);
 }, { superOnly: true });
