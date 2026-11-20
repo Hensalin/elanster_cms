@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCircle2, MessageSquareWarning, ShieldCheck, UserPlus, ChevronDown, Check, FileText, Globe, LayoutDashboard, LogOut, Moon, Plus, Search, Sun, Users, UserCog, History, Tags } from "lucide-react";
 import { api } from "./ui";
 import { useSite } from "./site";
@@ -32,17 +32,24 @@ export function Nav({ user }: { user: User }) {
   const [dark, setDark] = useState(false);
   const swRef = useRef<HTMLDivElement>(null); const menuRef = useRef<HTMLDivElement>(null);
   // Notifications: what needs this person's attention. Checked on load, every minute and when the tab comes back.
-  type Note = { id: string; kind: string; title: string; text: string; href: string; at: string; action: boolean };
-  const [notes, setNotes] = useState<Note[]>([]); const [bell, setBell] = useState(false); const [seen, setSeen] = useState(0); const bellRef = useRef<HTMLDivElement>(null);
-  useOutside(bellRef, () => setBell(false), bell);
+  type Note = { id: string; key: string; kind: string; title: string; text: string; href: string; at: string; action: boolean; seen: boolean };
+  const [notes, setNotes] = useState<Note[]>([]); const [bell, setBell] = useState(false); const [older, setOlder] = useState(false); const bellRef = useRef<HTMLDivElement>(null);
+  const onScreen = useRef<string[]>([]);   // the new ones on screen while the bell is open: seen when it closes
+  const pull = useCallback(() => api<{ items: Note[] }>("/api/v1/admin/notifications").then((r) => setNotes(r.items)).catch(() => {}), []);
+  const markSeen = useCallback((keys: string[] | "all") => {
+    if (keys !== "all" && !keys.length) return;
+    setNotes((l) => l.map((n) => (keys === "all" || keys.includes(n.key) ? { ...n, seen: true } : n)));
+    api("/api/v1/admin/notifications", { method: "POST", body: keys === "all" ? { all: true } : { keys } }).catch(() => {});
+  }, []);
+  const closeBell = useCallback(() => { setBell(false); setOlder(false); markSeen(onScreen.current); onScreen.current = []; }, [markSeen]);
+  useOutside(bellRef, closeBell, bell);
   useEffect(() => {
-    try { setSeen(Number(localStorage.getItem("cms.notes.seen") || 0)); } catch { /* ignore */ }
-    const pull = () => api<{ items: Note[] }>("/api/v1/admin/notifications").then((r) => setNotes(r.items)).catch(() => {});
     pull(); const t = setInterval(pull, 60_000); const v = () => { if (document.visibilityState === "visible") pull(); };
     document.addEventListener("visibilitychange", v); return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); };
-  }, []);
-  const unread = notes.filter((n) => n.action || +new Date(n.at) > seen).length;
-  const openBell = () => { setBell((x) => !x); const now = Date.now(); setTimeout(() => { setSeen(now); try { localStorage.setItem("cms.notes.seen", String(now)); } catch { /* ignore */ } }, 1500); };
+  }, [pull]);
+  const fresh = notes.filter((n) => !n.seen), earlier = notes.filter((n) => n.seen);
+  const unread = fresh.length;
+  const openBell = () => { if (bell) { closeBell(); return; } onScreen.current = fresh.map((n) => n.key); setBell(true); };
   const NOTE_IC: Record<string, React.ReactNode> = { approve: <UserPlus size={15} />, review: <ShieldCheck size={15} />, changes: <MessageSquareWarning size={15} />, live: <CheckCircle2 size={15} /> };
   useOutside(swRef, () => setSwOpen(false), swOpen); useOutside(menuRef, () => setMenu(false), menu);
   useEffect(() => { api("/api/v1/admin/websites").then(setSites).catch(() => {}); }, []);
@@ -115,10 +122,11 @@ export function Nav({ user }: { user: User }) {
           <button className="icon-btn bell" onClick={openBell} aria-haspopup="menu" aria-expanded={bell} aria-label={unread ? `${unread} notifications` : "Notifications"}>
             <Bell size={16} />{unread > 0 && <span className="bell-n">{unread > 9 ? "9+" : unread}</span>}</button>
           {bell && <div className="pop me-pop note-pop" role="menu">
-            <div className="note-h"><b>Notifications</b><small>{notes.filter((n) => n.action).length} need you</small></div>
-            {notes.length ? notes.map((n) => <button key={n.id} role="menuitem" className={"note k-" + n.kind + (n.action || +new Date(n.at) > seen ? " new" : "")} onClick={() => { setBell(false); router.push(n.href); }}>
-              <span className="note-ic">{NOTE_IC[n.kind]}</span><span className="note-t"><b>{n.title}</b><small>{n.text}</small><small className="note-at">{new Date(n.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</small></span></button>)
-              : <p className="pop-none">You&apos;re all caught up.</p>}
+            <div className="note-h"><b>Notifications</b>{unread > 0 ? <button type="button" className="note-all" onClick={() => { onScreen.current = []; markSeen("all"); }}>Mark all as read</button> : <small>No new ones</small>}</div>
+            {[...fresh, ...(older ? earlier : [])].map((n) => <button key={n.key} role="menuitem" className={"note k-" + n.kind + (!n.seen ? " new" : " seen")} onClick={() => { markSeen([n.key]); onScreen.current = onScreen.current.filter((k) => k !== n.key); setBell(false); setOlder(false); router.push(n.href); }}>
+              <span className="note-ic">{NOTE_IC[n.kind]}</span><span className="note-t"><b>{n.title}</b><small>{n.text}</small><small className="note-at">{new Date(n.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</small></span></button>)}
+            {!fresh.length && !older && <p className="pop-none">You&apos;re all caught up.</p>}
+            {earlier.length > 0 && <button type="button" className="note-more" onClick={() => setOlder((x) => !x)}>{older ? "Hide earlier" : `Show earlier (${earlier.length})`}</button>}
           </div>}
         </div>
         <div className="menu-wrap" ref={menuRef}>

@@ -12,6 +12,9 @@ export default function Pages() {
     try { setRows(await api("/api/v1/admin/pages" + (site ? "?website=" + site : ""))); } catch (e) { toast((e as Error).message, true); }
   }, [site]); // eslint-disable-line
   useEffect(() => { api("/api/v1/admin/websites").then((s) => { setSites(s); }); }, []);
+  // Connecting a website is for Super Admins; importing and checking for anyone who publishes. Editors only edit page texts.
+  const [me, setMe] = useState<{ sup: boolean; admin: boolean }>({ sup: false, admin: false });
+  useEffect(() => { api("/api/v1/auth/me").then((m) => setMe({ sup: m.user.role === "SUPER_ADMIN", admin: m.user.role === "SUPER_ADMIN" || Object.values(m.websiteRoles ?? {}).includes("WEBSITE_ADMIN") })).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
   // The wizard works on the chosen website; its address is filled in from what the CMS already knows.
   useEffect(() => { const t = sites.find((x) => x.id === site) ?? (sites.length === 1 ? sites[0] : null); setAddr(t?.domain ?? ""); }, [site, sites]);
@@ -48,10 +51,10 @@ export default function Pages() {
   return (<>
     <div className="head"><div><h1>Pages</h1><p>Edit the text of your website pages. The design stays exactly as it is on your site.</p></div>
       <div><input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ""; }} />
-        <button className="btn" onClick={check}>Check live connection</button>{" "}<button className="btn" onClick={() => file.current?.click()}>Import from file</button>{" "}
-        <button className="btn orange" onClick={() => { setDone(false); setOpen(true); }}>Connect website</button></div></div>
+        {me.admin && <><button className="btn" onClick={check}>Check live connection</button>{" "}<button className="btn" onClick={() => file.current?.click()}>Import from file</button>{" "}</>}
+        {me.sup && <button className="btn orange" onClick={() => { setDone(false); setOpen(true); }}>Connect website</button>}</div></div>
     <div className="toolbar"><select aria-label="Website" value={site} onChange={(e) => setSite(e.target.value)}><option value="">All websites</option>{sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-    {!rows ? <p>Loading…</p> : !rows.length ? <div className="empty">No pages yet. Click <b>Connect website</b> to bring in all the text from your site.</div> :
+    {!rows ? <p>Loading…</p> : !rows.length ? <div className="empty">No pages yet. {me.sup ? <>Click <b>Connect website</b> to bring in all the text from your site.</> : "Ask a Super Admin to connect the website."}</div> :
       <div className="card" style={{ padding: 0, overflowX: "auto" }}><table>
         <thead><tr><th>Page</th><th>Website</th><th>Status</th><th>Edited texts</th><th>Last published</th><th></th></tr></thead>
         <tbody>{rows.map((p) => (<tr key={p.id}>

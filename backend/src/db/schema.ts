@@ -243,3 +243,11 @@ export const gitFiles = pgTable("git_files", {
   lastSha: text("last_sha").notNull().default(""),
   updatedAt: updatedAt(),
 }, (t) => [primaryKey({ columns: [t.websiteId, t.path] })]);
+
+// Notifications a person has already seen (the bell hides them). key = "<item id>@<time of the event>", so a new event on the
+// same item (sent for review again, new changes requested) shows up as new.
+export const notificationSeen = pgTable("notification_seen", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  noteKey: text("note_key").notNull(),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.noteKey] })]);

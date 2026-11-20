@@ -51,7 +51,7 @@ function WeekCard({ items, tall }: { items: WeekItem[]; tall?: boolean }) {
   const sel = days.find((d) => d.toDateString() === picked) ?? (days.some((d) => same(d, today)) && onDay(today).length ? today : firstBusy ?? (offset === 0 ? today : days[0]));
   const list = onDay(sel);
   const label = start.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  return (<div className={"card s4 week" + (tall ? " tall" : "")}>
+  return (<div className={"card s4 week flat" + (tall ? " tall" : "")}>
     <div className="card-h wk-head"><h2>{label}</h2>
       <div className="wk-nav">
         <button aria-label="Previous week" onClick={() => { setOffset(offset - 1); setPicked(null); }}>‹</button>
@@ -92,6 +92,7 @@ export default function Dashboard() {
   const L = INTRO[s.level];
  const canPub = s.level !== "editor";
   const act = async (id: string, action: "publish" | "unpublish") => {
+    if (action === "unpublish" && !confirm("Take this article off the website? It goes back to draft.")) return;
     try { await api(`/api/v1/admin/blogs/${id}/publish`, { method: "POST", body: { action } }); toast(action === "publish" ? "Published" : "Sent back to draft"); load(); } catch (e) { toast((e as Error).message, true); }
   };
   const list = (rows: any[], empty: string, date: "updatedAt" | "publishedAt", extra?: (b: any) => React.ReactNode) => rows.length ? rows.map((b) => (
@@ -128,11 +129,11 @@ export default function Dashboard() {
     : <div className="bento">
       <div className="card s4"><div className="card-h"><h2>Needs your review {s.review > 0 && <span className="count-pill">{s.review}</span>}</h2><Link className="linkish" href="/content">See all</Link></div>
         {list(s.reviewQueue.slice(0, 3), "All caught up. Nothing is waiting for review.", "updatedAt", (b) => b.kind === "page" ? <Link className="btn sm orange" href={b.href}>Review</Link> : <button className="btn sm orange" disabled={!canPub} onClick={() => act(b.id, "publish")}>Publish</button>)}</div>
-      <div className="card s4"><div className="card-h"><h2>Recently published</h2><Link className="linkish" href="/content">See all</Link></div>
+      <div className="card s4 flat"><div className="card-h"><h2>Recently published</h2><Link className="linkish" href="/content">See all</Link></div>
         {list(s.recentPublished.slice(0, 3), "Nothing published yet.", "publishedAt", (b) => <button className="btn sm" onClick={() => act(b.id, "unpublish")}>Unpublish</button>)}</div>
       <WeekCard items={[...s.recentPublished.map((b: any) => ({ id: b.id, title: b.title, when: b.publishedAt, kind: "Published", href: b.href, site: b.website?.name })),
         ...s.reviewQueue.map((b: any) => ({ id: b.kind + b.id, title: b.title, when: b.updatedAt, kind: "Sent for review", href: b.href, site: b.website?.name }))].filter((x) => x.when)} />
-      <div className="card s5"><div className="card-h"><h2>{s.level === "super" ? "Recent activity" : "Activity on your websites"}</h2><Link className="linkish" href="/activity">Open log</Link></div>
+      <div className="card s5 flat"><div className="card-h"><h2>{s.level === "super" ? "Recent activity" : "Activity on your websites"}</h2><Link className="linkish" href="/activity">Open log</Link></div>
         {s.activity.length ? <ul className="feed">{s.activity.slice(0, 4).map((a) => <li key={a.id}><span className="feed-av" aria-hidden>{(a.user?.name ?? "S").slice(0, 1)}</span>
           <span className="feed-t">{a.summary ? a.summary[0].toUpperCase() + a.summary.slice(1) : ""}<small>{a.user?.name ?? "System"}</small></span><span className="feed-d">{fmt(a.createdAt)}</span></li>)}</ul>
           : <div className="empty-art"><QuietArt /><p>No activity yet.</p></div>}</div>

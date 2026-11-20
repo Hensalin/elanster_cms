@@ -30,3 +30,15 @@ How it was tested: production builds and development servers of the CMS against 
 - **Build:** both production builds pass; TypeScript passes.
 
 Full numbers: `FINAL_COMPLETION_REPORT.md`. All issues: `BUG_TRACKER.md`.
+
+---
+
+## Round 2 — 19 Nov 2026, evening
+
+**Scope:** every button, link and tab on all 14 CMS screens for the three roles; the notification bell; the Git publishing workflow added today (sync, publish, scheduled, cleanup, blog folder, content only from Git); the We Are Zion website (28 pages, desktop and phone).
+
+**Method:** an automatic click tester (Playwright) signed in as Super Admin, Website Admin and Editor, opened each screen and clicked each distinct control, recording what happened. Requests from Delete/Remove/Unpublish/Turn off and similar were blocked so no test data was lost. Findings were then checked by hand; anything the tester could not see (new tabs, file pickers, the browser's own form messages) was checked separately.
+
+**Result:** 14 verified bugs (1 critical, 4 high, 6 medium, 3 low), all fixed and retested — see `BUG_TRACKER.md` R2-01 … R2-14. No failing server answers remain that come from the CMS itself. The We Are Zion website had no broken links, no script errors and no sideways scrolling.
+
+**Limits:** the click tester cannot judge whether a result is *correct* (only that something happened without errors); workflows are covered by the dedicated tests listed in `TEST_CASES.md`. The Super Admin click test ran before the fixes; the fixes it touches were verified with `verify.py`. Tests ran on a local copy with a fake GitHub, not on the live CMS, live database or real GitHub.

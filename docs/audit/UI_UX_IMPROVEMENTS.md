@@ -12,3 +12,13 @@
 Earlier in the project (already delivered): page review workflow, suggested changes for live articles, author field at the top, week calendar, dashboard motion with reduced-motion support, plain field names, edited-only filter, unsaved counter.
 
 Recommended next: a clear "who is editing this now" indicator; an empty-state guide on a brand-new website; keyboard shortcuts list (press `?`).
+
+---
+
+## Round 2 — 19 Nov 2026, evening
+
+- **Notification bell:** shows only what is new; closing it or opening an item clears it; "Mark all as read"; "Show earlier (N)" for seen ones; on phones the window spans the screen.
+- **Phones:** content uses the full width (was squeezed into 260 px of a 390 px screen).
+- **Safer actions:** Unpublish (4 places) and turning a website off now ask first.
+- **No silent buttons:** empty category name explains what is missing; copy buttons say when copying is not possible.
+- **Less noise for Editors:** no Sync button and no automatic sync errors; admin-only buttons hidden on the Pages screen.

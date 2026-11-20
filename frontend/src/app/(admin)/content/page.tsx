@@ -65,8 +65,9 @@ function ContentScreen() {
   useEffect(() => { setSel(new Set()); setPage(1); }, [kind, site, q, status]);
   useEffect(() => {
     const t = syncTarget(); if (!site || !rows || !t?.domain || !t.active || autoSynced.current.has(t.id)) return;   // "All websites": nothing is read automatically
+    if (!canPub(t.id)) return;   // only Website Admins and Super Admins may read the website (the server refuses editors)
     autoSynced.current.add(t.id); syncPages(true);
-  }, [kind, rows, sites, site]); // eslint-disable-line
+  }, [kind, rows, sites, site, roles]); // eslint-disable-line
   // Links like /content?open=blogs:ID (from the Ctrl+K search) or /content?new=1
   useEffect(() => {
     const o = sp.get("open"); if (o) { const [k, id] = o.split(":"); if (k === "pages" && id) { router.replace(`/pages/${id}`); return; } if (k && id) { setKind(k as Kind); setOpen({ kind: k as Kind, id, title: "" }); } router.replace("/content"); }
@@ -87,6 +88,7 @@ function ContentScreen() {
   const bulk = async (action: "publish" | "unpublish" | "delete") => {
     const ids = [...sel]; if (!ids.length) return;
     if (action === "delete" && !confirm(`Delete ${ids.length} article${ids.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
+    if (action === "unpublish" && !confirm(`Take ${ids.length} item${ids.length > 1 ? "s" : ""} off the website?`)) return;
     setBusy(true);
     const res = await Promise.allSettled(ids.map((id) => action === "delete" ? api(`/api/v1/admin/blogs/${id}`, { method: "DELETE" })
       : api(`/api/v1/admin/${kind}/${id}/publish`, { method: "POST", body: { action } })));
@@ -95,6 +97,7 @@ function ContentScreen() {
   };
   const openRow = (r: Row) => kind === "pages" ? router.push(`/pages/${r.id}`) : setOpen({ kind, id: r.id, title: r.title });
   const quick = async (r: Row, action: "publish" | "unpublish") => {
+    if (action === "unpublish" && !confirm(`Take “${r.title}” off the website?`)) return;
     try { await api(`/api/v1/admin/${kind}/${r.id}/publish`, { method: "POST", body: { action } }); toast(action === "publish" ? `“${r.title}” is live` : `“${r.title}” taken off the website`); load(); }
     catch (e) { toast((e as Error).message, true); }
   };
@@ -110,7 +113,7 @@ function ContentScreen() {
       <div className="list-head">
         <div><h1>{kind === "blogs" ? "Blog" : "Pages"}</h1><p>{kind === "blogs" ? "Write, review and publish articles. They appear on your website's Blog page." : "Every page of your live website, kept in sync. Edit text, links and images; the design stays exactly as it is."}</p></div>
         <div className="list-actions">
-          {<button className="btn" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Sync from website"}</button>}
+          {(() => { const t = syncTarget(); return !t || canPub(t.id); })() && <button className="btn" disabled={syncing} onClick={() => syncPages()}><RefreshCw size={15} className={syncing ? "spin" : ""} /> {syncing ? "Reading website…" : "Sync from website"}</button>}
           {kind === "pages" && <button className="btn" onClick={() => router.push("/pages")}><Link2 size={15} /> Connection</button>}
           {kind === "blogs" && <button className="btn dark" onClick={() => setOpen({ kind: "blogs", id: "new", title: "New article" })}><Plus size={15} /> New article</button>}
         </div>

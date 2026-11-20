@@ -1,4 +1,5 @@
 "use client";
+import { copyText } from "@/lib/clipboard";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, useToast } from "@/components/ui";
 import { uploadImage, type MediaItem } from "@/components/MediaPicker";
@@ -31,7 +32,7 @@ export default function Media() {
           <p style={{ margin: "8px 4px 2px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.originalName}</p>
           <small style={{ color: "var(--muted)", margin: "0 4px", display: "block" }}>{Math.round(m.size / 1024)} KB · {m.altText ? "has alt text" : "no alt text"}</small>
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            <button className="btn sm" onClick={() => { navigator.clipboard?.writeText(m.url); toast("Link copied"); }}>Copy link</button>
+            <button className="btn sm" onClick={async () => { (await copyText(new URL(m.url, location.origin).href)) ? toast("Link copied") : toast("Could not copy the link", true); }}>Copy link</button>
             <button className="btn sm" onClick={() => alt(m)}>Alt text</button><button className="btn sm danger" onClick={() => del(m)}>Delete</button></div></div>)}
       </div>}
     {el}

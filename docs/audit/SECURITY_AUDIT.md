@@ -26,3 +26,12 @@ Method: code review of all 42 API routes and the auth library, automated tests (
 - No automated scanner (OWASP ZAP) was run; findings come from code review and targeted tests.
 - No MFA (OPEN-01). Recommended before adding more admins.
 - Penetration testing of Vercel/Supabase infrastructure was out of scope.
+
+---
+
+## Round 2 — 19 Nov 2026, evening
+
+- Every click as Editor and Website Admin was recorded: no admin-only action succeeded for them (the server refused with 403 where a button was wrongly shown; those buttons are now hidden — R2-06, R2-11).
+- New endpoint `POST /api/v1/admin/notifications` (mark seen): signed-in only (401 otherwise), validated input (422), writes only the person's own rows; old marks removed after 90 days.
+- Git publishing: the GitHub token stays on the server (never in answers, logs or the database — checked in `git-publish.mjs`); the CMS may only write the website's pages, `blog/…` / `blogs/…` article files, `assets/uploads/…` and its own sitemap block; never force-pushes.
+- The cleanup of copied articles hides (soft-deletes); nothing is erased.

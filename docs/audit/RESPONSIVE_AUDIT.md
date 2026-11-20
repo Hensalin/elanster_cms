@@ -13,3 +13,19 @@ Widths: 320, 375, 390, 430, 768, 1024, 1280, 1440, 1920 px. Check: no sideways s
 | Website: home, about, blog, article, contact, give, events, church life | No overflow at any width | No change needed |
 
 Result: 54/54 CMS and 72/72 website checks without overflow.
+
+---
+
+## Round 2 — 19 Nov 2026, evening
+
+| Width | Dashboard | Content | Media | Websites | Account | Bell window |
+|---|---|---|---|---|---|---|
+| 320 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 375 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 390 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 430 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 560 | ✓ | ✓ | ✓ | ✓ | ✓ | – |
+| 768 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 1024 / 1280 / 1440 / 1920 | ✓ | ✓ | ✓ | ✓ | ✓ | – |
+
+✓ = no sideways scrolling, content starts at the edge on phones (≤ 560 px) and uses the width. Fixed this round: content squeezed on phones (R2-10), bell window off-screen on phones (R2-09). We Are Zion: 28 pages at 1366 px and 390 px, no sideways scrolling.

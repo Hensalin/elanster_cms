@@ -12,7 +12,7 @@ export default function Categories() {
   useEffect(() => { api<W[]>("/api/v1/admin/websites").then((w) => { setSites(w); if (!site && w[0]) choose(w[0].id); }); }, []); // eslint-disable-line
   const load = () => site && api<C[]>(`/api/v1/admin/categories?website=${site}`).then(setRows).catch((e) => toast(e.message, true));
   useEffect(() => { setRows(null); load(); }, [site]); // eslint-disable-line
-  const add = async (e: React.FormEvent) => { e.preventDefault(); if (!name.trim()) return; try { await api("/api/v1/admin/categories", { method: "POST", body: { websiteId: site, name } }); setName(""); toast("Category added"); load(); } catch (x) { toast((x as Error).message, true); } };
+  const add = async (e: React.FormEvent) => { e.preventDefault(); if (!name.trim()) { toast("Write a name for the new category first", true); return; } try { await api("/api/v1/admin/categories", { method: "POST", body: { websiteId: site, name } }); setName(""); toast("Category added"); load(); } catch (x) { toast((x as Error).message, true); } };
   const patch = async (c: C, body: Partial<C>) => { try { await api(`/api/v1/admin/categories/${c.id}`, { method: "PATCH", body }); toast("Saved"); load(); } catch (x) { toast((x as Error).message, true); } };
   const del = async (c: C) => { if (!confirm(`Delete "${c.name}"? Articles in it will have no category.`)) return; try { await api(`/api/v1/admin/categories/${c.id}`, { method: "DELETE" }); toast("Deleted"); load(); } catch (x) { toast((x as Error).message, true); } };
   return (<>

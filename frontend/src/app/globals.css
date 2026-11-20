@@ -831,3 +831,71 @@ textarea[readonly], input[readonly] { background: var(--soft, #f6f4f2); color: v
 .wk-kind.pub, .ring-k.g { color: #15803d !important; }
 .theme-seg button.on { background: #c2410c !important; color: #fff !important; }
 kbd { color: #4b4b52; }
+
+/* Notifications: mark all as read, earlier (seen) ones */
+.note-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.note-all, .note-more { background: none; border: 0; padding: 4px 6px; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #c2410c; cursor: pointer; }
+.note-all:hover, .note-more:hover { background: rgba(194, 65, 12, .08); }
+.note-all:focus-visible, .note-more:focus-visible { outline: 2px solid #c2410c; outline-offset: 2px; }
+.note-more { display: block; width: 100%; text-align: center; margin-top: 4px; padding: 8px; }
+.note.seen { opacity: .72; }
+.note.seen .note-ic { filter: grayscale(.6); }
+
+/* Phones: the notification window spans the screen instead of hanging off its left edge */
+@media (max-width: 560px) {
+  .note-pop { position: fixed !important; left: 8px !important; right: 8px !important; top: 64px !important; width: auto !important; max-width: none !important; max-height: calc(100vh - 140px); overflow-y: auto; z-index: 60; }
+}
+
+/* Phones: the side menu is hidden here (the bottom bar replaces it), so its space is not kept free on the left */
+@media (max-width: 560px) {
+  .shell { padding: 0 !important; }
+  .frame { padding: 0 14px 96px !important; border-radius: 0 !important; }
+}
+
+/* Recently published · calendar · recent activity: flat rows with thin dividers (no boxes-in-boxes, no shadows) */
+.bento .card.flat .row, .card.flat .feed li, .card.flat .wk-box {
+  background: transparent !important; box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; border: 0 !important;
+  border-top: 1px solid var(--line) !important; padding: 12px 2px !important;
+}
+.bento .card.flat .row:first-of-type, .card.flat .feed li:first-child, .card.flat .wk-list li:first-child .wk-box { border-top: 0 !important; }
+.card.flat .row b, .card.flat .feed-t, .card.flat .wk-box b { font-size: 13.5px !important; font-weight: 600 !important; color: var(--ink); }
+.card.flat .row small, .card.flat .feed-t small, .card.flat .wk-box small, .card.flat .feed-d, .card.flat .wk-time { font-size: 12px !important; color: var(--muted) !important; font-weight: 400; }
+.card.flat .row .btn.sm { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 500; box-shadow: none; }
+.card.flat .row .btn.sm:hover { color: #c2410c; border-color: #c2410c; }
+/* activity */
+.card.flat .feed li { grid-template-columns: 28px minmax(0, 1fr) auto !important; gap: 12px !important; }
+.card.flat .feed-av { width: 28px !important; height: 28px !important; border-radius: 50% !important; background: var(--soft) !important; color: var(--ink) !important; font-size: 12px !important; font-weight: 600 !important; box-shadow: none !important; }
+.card.flat .feed-d { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* calendar */
+.card.flat .week-strip { gap: 2px !important; margin: 4px 0 10px !important; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.card.flat .wd { background: transparent !important; color: var(--ink) !important; box-shadow: none !important; border-radius: 10px !important; padding: 6px 0 8px !important; }
+.card.flat .wd small { color: var(--muted) !important; font-size: 11px !important; text-transform: none; }
+.card.flat .wd b { width: auto !important; height: auto !important; background: none !important; color: var(--ink) !important; font-size: 14px !important; font-weight: 600 !important; border-radius: 0 !important; }
+.card.flat .wd.today b { color: #c2410c !important; }
+.card.flat .wd.sel { background: var(--soft) !important; }
+.card.flat .wd:hover { background: var(--soft) !important; }
+.card.flat .wd-dots i, .card.flat .wd i { background: #c2410c !important; width: 4px !important; height: 4px !important; opacity: .8; }
+.card.flat .wd-dots i + i { display: none; }
+.card.flat .wk-day b { font-size: 13.5px; } .card.flat .wk-day span, .card.flat .wk-day em { color: var(--muted); font-size: 12px; font-style: normal; }
+.card.flat .wk-list li { display: grid !important; grid-template-columns: 62px minmax(0, 1fr) !important; align-items: start !important; gap: 8px !important; margin: 0 !important; }
+.card.flat .wk-list li .wk-time { padding-top: 13px; font-variant-numeric: tabular-nums; }
+.card.flat .wk-box::before { display: none !important; }
+.card.flat .wk-box { padding-left: 0 !important; }
+.card.flat .wk-kind { font-weight: 500 !important; }
+.card.flat .wk-nav button { background: transparent !important; box-shadow: none !important; border: 1px solid var(--line) !important; color: var(--ink) !important; }
+.card.flat .wk-nav .wk-today.on { color: #c2410c !important; }
+.card.flat .feed-av { background: var(--card) !important; border: 1px solid var(--line) !important; }
+/* Logo: flat, no orange glow */
+.rail-logo { box-shadow: 0 1px 2px rgba(0,0,0,.18) !important; border-radius: 12px !important; }
+[data-theme="dark"] .rail-logo { box-shadow: 0 0 0 1px rgba(255,255,255,.12) !important; }
+
+/* Dashboard cards: no gap above the sticky title when a card is scrolled */
+@media (min-width: 1181px) and (min-height: 761px) {
+  .dash .bento .card { padding-top: 0 !important; }
+  .dash .bento .card .card-h { position: sticky; top: 0 !important; z-index: 2; margin: 0 -18px 4px !important; padding: 18px 18px 8px !important; background: var(--soft) !important; background: inherit !important; }
+  /* calendar: title, days and day label stay put; only the list of updates scrolls */
+  .dash .bento .card.week { display: flex; flex-direction: column; overflow: hidden !important; padding-bottom: 0 !important; mask-image: none !important; }
+  .dash .bento .card.week .card-h { position: static; }
+  .dash .bento .card.week .wk-list, .dash .bento .card.week .wk-empty { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; margin: 0 !important; padding-bottom: 14px; mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
+  .dash .bento .card.week .wk-list::-webkit-scrollbar { display: none; }
+}

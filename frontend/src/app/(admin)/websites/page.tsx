@@ -1,4 +1,5 @@
 "use client";
+import { copyText } from "@/lib/clipboard";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CircleAlert, GitBranch, KeyRound, Link2, Plus, Power, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { api, fmt, useToast } from "@/components/ui";
@@ -18,7 +19,7 @@ export default function Websites() {
         <thead><tr><th>Website</th><th>Address</th><th className="num">Live</th><th className="num">Drafts</th><th>Connection</th><th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{sites.map((s) => {
           const setAddress = async () => { const d = prompt("Website address (used for the live preview and links). Example: https://websiteelanster.vercel.app", s.domain || ""); if (d === null) return; try { const r = await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { domain: d.trim() } }); toast(r.sync?.pages ? `Address saved · ${r.sync.pages.length} pages brought in from the website` : r.sync?.error ? `Address saved. Pages not read: ${r.sync.error}` : "Address saved"); load(); } catch (e) { toast((e as Error).message, true); } };
-          const toggle = async () => { try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website turned off" : "Website turned on"); load(); } catch (e) { toast((e as Error).message, true); } };
+          const toggle = async () => { if (s.active && !confirm(`Turn off ${s.name}? The CMS stops sending content to this website until you turn it on again.`)) return; try { await api(`/api/v1/admin/websites/${s.id}`, { method: "PUT", body: { active: !s.active } }); toast(s.active ? "Website turned off" : "Website turned on"); load(); } catch (e) { toast((e as Error).message, true); } };
           return (<tr key={s.id}>
           <td><div className="site-cell"><span className={"site-ic" + (s.active ? " on" : "")} aria-hidden>{s.name.slice(0, 1)}</span><div><b>{s.name}</b><small>{s.slug}</small></div></div></td>
           <td>{s.domain ? <a className="mut" href={s.domain} target="_blank" rel="noreferrer">{s.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a> : <span className="mut">Not set</span>}</td>
@@ -66,7 +67,7 @@ function Keys({ site, onClose, toast }: { site: any; onClose: () => void; toast:
     {fresh && <div style={{ marginBottom: 14 }}><p><b>Your website script. Copy it now, it will not be shown again.</b></p>
       <p style={{ color: "var(--muted)" }}>Paste this line inside the <code>&lt;head&gt;</code> of your pages (just before <code>&lt;/head&gt;</code>), then push. It runs on every page where it is pasted.</p>
       <div className="keybox" style={{ wordBreak: "break-all" }}>{sharedSnippet(fresh)}</div>
-      <button className="btn sm dark" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(sharedSnippet(fresh)); toast("Script copied"); }}>Copy script</button></div>}
+      <button className="btn sm dark" style={{ marginTop: 8 }} onClick={async () => { (await copyText(sharedSnippet(fresh))) ? toast("Script copied") : toast("Could not copy. Select the script and press Ctrl+C.", true); }}>Copy script</button></div>}
     <div style={{ display: "flex", gap: 8, marginBottom: 14 }}><input type="text" value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Key label" />
       <button className="btn dark" onClick={async () => { try { const r = await api(`/api/v1/admin/websites/${site.id}/api-keys`, { method: "POST", body: { label } }); setFresh(r.key); load(); } catch (e) { toast((e as Error).message, true); } }}>Create key</button></div>
     {keys.map((k) => (<div className="row" key={k.id}><div><b>{k.label}</b> <code>{k.prefix}…</code><small>Created {fmt(k.createdAt)} · last used {fmt(k.lastUsedAt)}</small></div>
@@ -121,7 +122,7 @@ function GitPanel({ site, onClose, toast }: { site: any; onClose: () => void; to
     {g && !g.tokenSet && <p className="err-text" role="alert"><b>The GitHub token is not set on the server.</b> Add <code>GITHUB_TOKEN</code> in Vercel → the <b>elanster-cms</b> project → Settings → Environment Variables, then redeploy.</p>}
     <div className="field"><label htmlFor="gr">GitHub repository</label><input id="gr" type="text" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="Hensalin/elanster_website-demo" /></div>
     <div className="field"><label htmlFor="gb">Branch</label><input id="gb" type="text" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></div>
-    <p style={{ color: "var(--muted)", fontSize: 13 }}>Leave the repository empty to turn Git publishing off. The CMS only ever writes the website's pages, its article pages (<code>article-….html</code>), uploaded pictures and a block in <code>sitemap.xml</code>. It never touches anything else.</p>
+    <p style={{ color: "var(--muted)", fontSize: 13 }}>Leave the repository empty to turn Git publishing off. The CMS only ever writes the website's pages, its article pages (in the <code>blog/</code> or <code>blogs/</code> folder), uploaded pictures and a block in <code>sitemap.xml</code>. It never touches anything else.</p>
     {g && g.enabled && <div className="tip" style={{ marginTop: 10 }}>
       <b>Status: {g.status === "OK" ? "Up to date" : g.status === "WARN" ? "Needs a look" : g.status === "FAILED" ? "Failed" : g.status === "RUNNING" ? "Publishing…" : "Not published yet"}</b>
       {g.message && <div style={{ marginTop: 4 }}>{g.message}</div>}

@@ -276,3 +276,12 @@ export function gitAfter(websiteId: string, why: string) {
     } catch (e) { console.error("git publish failed", e); }
   });
 }
+
+/** Scheduled articles go live by time, without anyone pressing Publish. Websites on Git publishing get written again once
+    an article's time has passed after their last Git write. Called often (every open CMS window checks the bell each minute); cheap when nothing is due. */
+export async function gitScheduledDue() {
+  const due = await db.execute(sql`SELECT DISTINCT w.id FROM websites w JOIN blogs b ON b.website_id = w.id
+    WHERE w.git_repo <> '' AND w.deleted_at IS NULL AND w.git_status <> 'RUNNING' AND b.deleted_at IS NULL AND b.status = 'SCHEDULED'
+      AND b.scheduled_at <= now() AND (w.git_at IS NULL OR b.scheduled_at > w.git_at) LIMIT 5`);
+  for (const r of (due as unknown as { rows: { id: string }[] }).rows) gitAfter(r.id, "scheduled article is now live");
+}

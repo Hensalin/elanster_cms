@@ -90,6 +90,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
   };
   const act = async (action: "publish" | "unpublish" | "discard" | "submit" | "withdraw" | "request_changes", note?: string) => {
     if (action === "discard" && !confirm("Throw away all unpublished changes on this page? This cannot be undone.")) return;
+    if (action === "unpublish" && !confirm("Unpublish this page? The website goes back to its original text.")) return;
     setBusy(true);
     try {
       // Publishing or sending for review first saves what is on screen, so nothing typed is lost.

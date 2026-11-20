@@ -74,3 +74,11 @@ CREATE TABLE IF NOT EXISTS git_files (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (website_id, path)
 );
+
+-- Notifications already seen (per person)
+CREATE TABLE IF NOT EXISTS notification_seen (
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  note_key text NOT NULL,
+  seen_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, note_key)
+);
