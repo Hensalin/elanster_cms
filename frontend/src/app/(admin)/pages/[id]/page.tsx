@@ -32,7 +32,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
   const load = useCallback(async () => {
     try {
       const p = await api(`/api/v1/admin/pages/${id}`); setPage(p);
-      setVals({ ...p.published, ...p.draft }); setDirty(false);
+      setVals({ ...p.published, ...p.draft }); baseDraft.current = p.draft ?? {}; setDirty(false);
     } catch (e) { toast((e as Error).message, true); }
   }, [id]); // eslint-disable-line
   useEffect(() => { load(); }, [load]);
@@ -72,6 +72,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
     window.addEventListener("keydown", k); window.addEventListener("beforeunload", u);
     return () => { window.removeEventListener("keydown", k); window.removeEventListener("beforeunload", u); if (t) clearTimeout(t); };
   }, [dirty, vals]); // eslint-disable-line
+  const baseDraft = useRef<Record<string, string>>({});
   const saveRef = useRef<(quiet?: boolean) => void>(() => {}); const pubRef = useRef<() => void>(() => {});
   const setVal = (k: string, v: string) => {
     const now = Date.now();
@@ -84,8 +85,8 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
   saveRef.current = (quiet?: boolean) => { save(quiet); }; pubRef.current = () => { act("publish"); };
   const save = async (quiet?: boolean) => {
     setBusy(true);
-    try { const r = await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap(), expectedUpdatedAt: page.updatedAt } });
-      if (!quiet) { toast("Draft saved. The live website is not changed yet."); await load(); } else { setDirty(false); setPage((p: any) => p && { ...p, unpublished: r.unpublished, updatedAt: r.updatedAt ?? p.updatedAt }); } } // eslint-disable-line @typescript-eslint/no-explicit-any
+    try { const r = await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap(), expectedUpdatedAt: page.updatedAt, expectedDraft: baseDraft.current } });
+      if (!quiet) { toast("Draft saved. The live website is not changed yet."); await load(); } else { setDirty(false); if (r.draft) baseDraft.current = r.draft; setPage((p: any) => p && { ...p, unpublished: r.unpublished, updatedAt: r.updatedAt ?? p.updatedAt }); } } // eslint-disable-line @typescript-eslint/no-explicit-any
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const act = async (action: "publish" | "unpublish" | "discard" | "submit" | "withdraw" | "request_changes", note?: string) => {
@@ -94,7 +95,7 @@ export default function PageEditor({ params }: { params: Promise<{ id: string }>
     setBusy(true);
     try {
       // Publishing or sending for review first saves what is on screen, so nothing typed is lost.
-      if ((action === "publish" || action === "submit") && !locked) await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap(), expectedUpdatedAt: page.updatedAt } });
+      if ((action === "publish" || action === "submit") && !locked) await api(`/api/v1/admin/pages/${id}`, { method: "PUT", body: { draft: changedMap(), expectedUpdatedAt: page.updatedAt, expectedDraft: baseDraft.current } });
       await api(`/api/v1/admin/pages/${id}/publish`, { method: "POST", body: { action, ...(note ? { note } : {}) } });
       if (action !== "publish") { toast(MSG[action]); setAsk(false); setNote(""); await load(); return; }
       if (action === "publish") { // connection check runs in the background, so publishing feels instant

@@ -247,7 +247,12 @@ export async function syncPages(websiteId: string, userId: string | null) {
       created++;
     } else {
       const old = readContent(ex.content); const keep = (r: Record<string, string>) => Object.fromEntries(Object.entries(r).filter(([k]) => keys.has(k)));
-      await db.update(schema.pages).set({ title: p.title, deletedAt: null, content: writeContent({ file: p.file ?? null, fields: p.fields, draft: keep(old.draft), published: keep(old.published) }) }).where(eq(schema.pages.id, ex.id));
+      // Nothing new on the website for this page: leave it alone, so someone editing it right now is not disturbed.
+      if (ex.title === p.title && !ex.deletedAt && (old.file ?? null) === (p.file ?? null) && JSON.stringify(old.fields) === JSON.stringify(p.fields)) continue;
+      // Re-read just before writing so a draft saved in the meantime is kept.
+      const [now] = await db.select({ content: schema.pages.content }).from(schema.pages).where(eq(schema.pages.id, ex.id));
+      const cur = now ? readContent(now.content) : old;
+      await db.update(schema.pages).set({ title: p.title, deletedAt: null, content: writeContent({ file: p.file ?? null, fields: p.fields, draft: keep(cur.draft), published: keep(cur.published) }) }).where(eq(schema.pages.id, ex.id));
       updated++;
     }
   }

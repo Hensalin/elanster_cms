@@ -39,7 +39,7 @@ function ContentScreen() {
     try {
       const r = await api(`/api/v1/admin/websites/${t.id}/sync-pages`, { method: "POST" });
       toast(`${r.pages.length} page${r.pages.length === 1 ? "" : "s"} found on ${t.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}` + (r.created ? ` · ${r.created} new` : "") + (r.removed ? ` · ${r.removed} removed` : "") + (r.posts?.added ? ` · ${r.posts.added} article${r.posts.added === 1 ? "" : "s"} brought in` : "") + (r.posts?.filled ? ` · ${r.posts.filled} article${r.posts.filled === 1 ? "" : "s"} completed (photo/category)` : "") + (r.posts?.problems?.length ? ` · Problem: ${r.posts.problems[0]}` : "") + (r.untagged?.length ? ` · ${r.untagged.length} not editable yet` : ""));
-      load();
+      loadRef.current();   // the list as it is NOW (the person may have switched website or Blog/Pages while the sync ran)
     } catch (e) { if (!quiet) toast((e as Error).message, true); } finally { setSyncing(false); }
   };
 
@@ -61,6 +61,7 @@ function ContentScreen() {
       }
     } catch (e) { setRows([]); toast((e as Error).message, true); }
   }, [site, kind, q, status, page]); // eslint-disable-line
+  const loadRef = useRef(load); loadRef.current = load;
   useEffect(() => { setRows(null); const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load]); // eslint-disable-line
   useEffect(() => { setSel(new Set()); setPage(1); }, [kind, site, q, status]);
   useEffect(() => {
@@ -93,12 +94,12 @@ function ContentScreen() {
     const res = await Promise.allSettled(ids.map((id) => action === "delete" ? api(`/api/v1/admin/blogs/${id}`, { method: "DELETE" })
       : api(`/api/v1/admin/${kind}/${id}/publish`, { method: "POST", body: { action } })));
     const bad = res.filter((r) => r.status === "rejected") as PromiseRejectedResult[]; setBusy(false); setSel(new Set());
-    toast(bad.length ? `${ids.length - bad.length} done, ${bad.length} failed: ${(bad[0].reason as Error).message}` : `Done for ${ids.length} item${ids.length > 1 ? "s" : ""}`, !!bad.length); load();
+    toast(bad.length ? `${ids.length - bad.length} done, ${bad.length} failed: ${(bad[0].reason as Error).message}` : `Done for ${ids.length} item${ids.length > 1 ? "s" : ""}`, !!bad.length); loadRef.current();
   };
   const openRow = (r: Row) => kind === "pages" ? router.push(`/pages/${r.id}`) : setOpen({ kind, id: r.id, title: r.title });
   const quick = async (r: Row, action: "publish" | "unpublish") => {
     if (action === "unpublish" && !confirm(`Take “${r.title}” off the website?`)) return;
-    try { await api(`/api/v1/admin/${kind}/${r.id}/publish`, { method: "POST", body: { action } }); toast(action === "publish" ? `“${r.title}” is live` : `“${r.title}” taken off the website`); load(); }
+    try { await api(`/api/v1/admin/${kind}/${r.id}/publish`, { method: "POST", body: { action } }); toast(action === "publish" ? `“${r.title}” is live` : `“${r.title}” taken off the website`); loadRef.current(); }
     catch (e) { toast((e as Error).message, true); }
   };
   const siteUrl = open ? `/${open.kind === "pages" ? "pages" : "blogs"}/${open.id}` : "";
